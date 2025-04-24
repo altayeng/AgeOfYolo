@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Age of Empires Style Game</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="top-bar">
+            <div class="age-info" id="current-age">Dark Age</div>
+            <div class="game-time" id="game-time">Year: 0</div>
+        </div>
+        <canvas id="game-canvas"></canvas>
+        <div id="minimap-container">
+            <canvas id="minimap"></canvas>
+            <div id="minimap-label">Mini Map</div>
+        </div>
+        <div id="debug-info"></div>
+        <div id="ui-container">
+            <div id="resources">
+                <div class="resource">
+                    <span class="resource-icon">🌲</span>
+                    <span class="resource-count" id="wood-count">0</span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon">🪨</span>
+                    <span class="resource-count" id="stone-count">0</span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon">🥩</span>
+                    <span class="resource-count" id="food-count">0</span>
+                </div>
+                <div class="resource">
+                    <span class="resource-icon">👤</span>
+                    <span class="resource-count" id="population-count">0/10</span>
+                </div>
+            </div>
+            <div id="actions">
+                <div class="action-group">
+                    <div class="group-title">Buildings</div>
+                    <div class="buttons-row">
+                        <button id="build-house" class="building-button" data-mobile-text="House">House</button>
+                        <button id="build-barracks" class="building-button" data-mobile-text="Barr">Barracks</button>
+                        <button id="build-mill" class="building-button" data-mobile-text="Mill">Mill</button>
+                        <button id="build-tower" class="building-button" data-mobile-text="Tower">Tower</button>
+                    </div>
+                </div>
+                <div class="action-group">
+                    <div class="group-title">Actions</div>
+                    <div class="buttons-row">
+                        <button id="gather" class="action-button" data-mobile-text="Get">Gather</button>
+                        <button id="craft-tool" class="action-button" data-mobile-text="Tool">Craft Tool</button>
+                        <button id="advance-age" class="action-button" data-mobile-text="Age">Advance Age</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
