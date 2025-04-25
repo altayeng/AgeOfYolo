@@ -150,8 +150,22 @@ const RESOURCE_NODES = {
 
 // Images (would be loaded from actual assets in a full game)
 const tileImages = {
-    [TILE_TYPES.GRASS]: { color: '#4CAF50' },  // Green for grass
-    [TILE_TYPES.DESERT]: { color: '#F9A825' }   // Yellow for desert
+    [TILE_TYPES.GRASS]: { 
+        color: '#4CAF50',
+        gradient: {
+            start: '#67BB6A',
+            mid: '#43A047',
+            end: '#2E7D32'
+        }
+    },
+    [TILE_TYPES.DESERT]: { 
+        color: '#F9A825',
+        gradient: {
+            start: '#FFD54F',
+            mid: '#FFC107',
+            end: '#FFA000'
+        }
+    }
 };
 
 // SimplexNoise implementation (minimal version for terrain generation)
@@ -941,8 +955,6 @@ function drawMap() {
 
 // Draw an isometric tile
 function drawIsometricTile(x, y, tileType) {
-    const tileColor = tileImages[tileType].color;
-    
     // Draw isometric diamond shape
     gameCtx.beginPath();
     gameCtx.moveTo(x, y - TILE_HEIGHT / 2);  // Top point
@@ -960,22 +972,59 @@ function drawIsometricTile(x, y, tileType) {
     );
     
     // Set gradient colors based on tile type
+    const tileInfo = tileImages[tileType];
+    
     if (tileType === TILE_TYPES.GRASS) {
-        gradient.addColorStop(0, '#5cb85c');
-        gradient.addColorStop(0.5, '#4cae4c');
-        gradient.addColorStop(1, '#3d8b3d');
+        gradient.addColorStop(0, tileInfo.gradient.start);
+        gradient.addColorStop(0.5, tileInfo.gradient.mid);
+        gradient.addColorStop(1, tileInfo.gradient.end);
+        
+        // Add texture to grass
+        gameCtx.fillStyle = gradient;
+        gameCtx.fill();
+        
+        // Add grass detail with noise pattern
+        const grassDetail = Math.random();
+        if (grassDetail > 0.8) {
+            // Small flowers or details
+            gameCtx.fillStyle = '#FFEB3B';
+            gameCtx.beginPath();
+            gameCtx.arc(x + (Math.random() * 10 - 5), y + (Math.random() * 10 - 5), 1, 0, Math.PI * 2);
+            gameCtx.fill();
+        } else if (grassDetail > 0.6) {
+            // Grass tuft detail
+            gameCtx.strokeStyle = '#388E3C';
+            gameCtx.lineWidth = 0.5;
+            const grassX = x + (Math.random() * 20 - 10);
+            const grassY = y + (Math.random() * 10 - 5);
+            gameCtx.beginPath();
+            gameCtx.moveTo(grassX, grassY);
+            gameCtx.lineTo(grassX - 2, grassY - 3);
+            gameCtx.moveTo(grassX, grassY);
+            gameCtx.lineTo(grassX + 2, grassY - 3);
+            gameCtx.stroke();
+        }
     } else {
-        gradient.addColorStop(0, '#f0ad4e');
-        gradient.addColorStop(0.5, '#eea236');
-        gradient.addColorStop(1, '#ec971f');
+        gradient.addColorStop(0, tileInfo.gradient.start);
+        gradient.addColorStop(0.5, tileInfo.gradient.mid);
+        gradient.addColorStop(1, tileInfo.gradient.end);
+        
+        // Fill with gradient
+        gameCtx.fillStyle = gradient;
+        gameCtx.fill();
+        
+        // Add desert details
+        if (Math.random() > 0.85) {
+            // Small stones or sand detail
+            gameCtx.fillStyle = '#E0E0E0';
+            gameCtx.beginPath();
+            gameCtx.arc(x + (Math.random() * 16 - 8), y + (Math.random() * 8 - 4), 1.5, 0, Math.PI * 2);
+            gameCtx.fill();
+        }
     }
     
-    // Fill with gradient
-    gameCtx.fillStyle = gradient;
-    gameCtx.fill();
-    
-    // Draw outline
-    gameCtx.strokeStyle = '#333';
+    // Draw subtle outline
+    gameCtx.strokeStyle = '#00000033';
     gameCtx.lineWidth = 0.5;
     gameCtx.stroke();
 }
@@ -984,60 +1033,131 @@ function drawIsometricTile(x, y, tileType) {
 function drawResource(x, y, resourceType) {
     switch (resourceType) {
         case 'TREE':
-            // Draw tree trunk
-            gameCtx.fillStyle = '#795548';
-            gameCtx.fillRect(x - 3, y, 6, 10);
+            // Tree with better shading and form
+            // Tree trunk with gradient
+            const trunkGradient = gameCtx.createLinearGradient(x - 3, y, x + 3, y);
+            trunkGradient.addColorStop(0, '#5D4037');
+            trunkGradient.addColorStop(0.5, '#795548');
+            trunkGradient.addColorStop(1, '#4E342E');
             
-            // Draw tree foliage (more detailed)
-            gameCtx.fillStyle = '#2E7D32';
+            gameCtx.fillStyle = trunkGradient;
+            gameCtx.fillRect(x - 3, y - 2, 6, 12);
+            
+            // Tree shadow
+            gameCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            gameCtx.beginPath();
+            gameCtx.ellipse(x, y + 10, 10, 4, 0, 0, Math.PI * 2);
+            gameCtx.fill();
+            
+            // Tree foliage with gradient
+            const foliageGradient = gameCtx.createRadialGradient(x, y - 15, 0, x, y - 15, 20);
+            foliageGradient.addColorStop(0, '#66BB6A');
+            foliageGradient.addColorStop(0.7, '#388E3C');
+            foliageGradient.addColorStop(1, '#1B5E20');
+            
+            gameCtx.fillStyle = foliageGradient;
+            
+            // Draw three levels of foliage for a fuller tree
+            gameCtx.beginPath();
+            gameCtx.moveTo(x, y - 30);
+            gameCtx.lineTo(x + 15, y - 15);
+            gameCtx.lineTo(x - 15, y - 15);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
             gameCtx.beginPath();
             gameCtx.moveTo(x, y - 25);
-            gameCtx.lineTo(x + 12, y - 10);
-            gameCtx.lineTo(x + 5, y - 10);
-            gameCtx.lineTo(x + 15, y + 2);
-            gameCtx.lineTo(x - 15, y + 2);
-            gameCtx.lineTo(x - 5, y - 10);
-            gameCtx.lineTo(x - 12, y - 10);
+            gameCtx.lineTo(x + 18, y - 8);
+            gameCtx.lineTo(x - 18, y - 8);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            gameCtx.beginPath();
+            gameCtx.moveTo(x, y - 20);
+            gameCtx.lineTo(x + 20, y);
+            gameCtx.lineTo(x - 20, y);
             gameCtx.closePath();
             gameCtx.fill();
             break;
             
         case 'STONE':
-            // Draw stone formation (more detailed)
-            gameCtx.fillStyle = '#9E9E9E';
+            // Stone with 3D effect and shading
+            const stoneGradient = gameCtx.createLinearGradient(x - 10, y - 10, x + 10, y + 5);
+            stoneGradient.addColorStop(0, '#9E9E9E');
+            stoneGradient.addColorStop(0.5, '#757575');
+            stoneGradient.addColorStop(1, '#616161');
+            
+            // Draw main rock
+            gameCtx.fillStyle = stoneGradient;
             gameCtx.beginPath();
-            gameCtx.moveTo(x - 10, y + 5);
-            gameCtx.lineTo(x - 5, y - 5);
-            gameCtx.lineTo(x + 8, y - 2);
-            gameCtx.lineTo(x + 10, y + 4);
+            gameCtx.moveTo(x - 10, y);
+            gameCtx.lineTo(x - 5, y - 8);
+            gameCtx.lineTo(x + 8, y - 10);
+            gameCtx.lineTo(x + 12, y - 2);
+            gameCtx.lineTo(x + 8, y + 5);
+            gameCtx.lineTo(x - 5, y + 3);
             gameCtx.closePath();
             gameCtx.fill();
             
-            // Add highlights
-            gameCtx.fillStyle = '#BDBDBD';
+            // Highlights
+            gameCtx.fillStyle = 'rgba(255, 255, 255, 0.3)';
             gameCtx.beginPath();
-            gameCtx.ellipse(x + 3, y - 1, 4, 2, 0, 0, Math.PI * 2);
+            gameCtx.moveTo(x - 5, y - 8);
+            gameCtx.lineTo(x + 2, y - 9);
+            gameCtx.lineTo(x - 2, y - 5);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Shadow
+            gameCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            gameCtx.beginPath();
+            gameCtx.ellipse(x, y + 5, 12, 4, 0, 0, Math.PI * 2);
             gameCtx.fill();
             break;
             
         case 'BERRY':
-            // Draw berry bush (more detailed)
-            // Draw leaves
-            gameCtx.fillStyle = '#388E3C';
+            // Berry bush with more details
+            // Bush base
+            const bushGradient = gameCtx.createRadialGradient(x, y - 5, 0, x, y - 5, 12);
+            bushGradient.addColorStop(0, '#558B2F');
+            bushGradient.addColorStop(1, '#33691E');
+            
+            gameCtx.fillStyle = bushGradient;
             gameCtx.beginPath();
-            gameCtx.ellipse(x, y, 10, 6, 0, 0, Math.PI * 2);
+            gameCtx.arc(x, y - 5, 12, 0, Math.PI * 2);
             gameCtx.fill();
             
             // Draw berries
-            gameCtx.fillStyle = '#E91E63';
+            for (let i = 0; i < 8; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 8;
+                const berryX = x + Math.cos(angle) * distance;
+                const berryY = y - 5 + Math.sin(angle) * distance;
+                
+                // Berry gradient for 3D effect
+                const berryGradient = gameCtx.createRadialGradient(
+                    berryX - 1, berryY - 1, 0, 
+                    berryX, berryY, 3
+                );
+                berryGradient.addColorStop(0, '#E91E63');
+                berryGradient.addColorStop(1, '#C2185B');
+                
+                gameCtx.fillStyle = berryGradient;
+                gameCtx.beginPath();
+                gameCtx.arc(berryX, berryY, 2.5, 0, Math.PI * 2);
+                gameCtx.fill();
+                
+                // Highlight on each berry
+                gameCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                gameCtx.beginPath();
+                gameCtx.arc(berryX - 0.8, berryY - 0.8, 0.8, 0, Math.PI * 2);
+                gameCtx.fill();
+            }
+            
+            // Shadow
+            gameCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
             gameCtx.beginPath();
-            gameCtx.arc(x - 3, y - 2, 3, 0, Math.PI * 2);
-            gameCtx.fill();
-            gameCtx.beginPath();
-            gameCtx.arc(x + 4, y - 1, 3, 0, Math.PI * 2);
-            gameCtx.fill();
-            gameCtx.beginPath();
-            gameCtx.arc(x + 1, y + 3, 3, 0, Math.PI * 2);
+            gameCtx.ellipse(x, y + 7, 10, 3, 0, 0, Math.PI * 2);
             gameCtx.fill();
             break;
     }
@@ -1045,128 +1165,197 @@ function drawResource(x, y, resourceType) {
 
 // Draw a building
 function drawBuilding(x, y, buildingType, isEnemy = false, isWall = false, kingdomId = null) {
-    const building = BUILDING_TYPES[buildingType];
-    let baseColor = building?.color || '#795548';
+    // Get kingdom color if available
+    const kingdomColor = kingdomId !== null ? KINGDOM_COLORS[kingdomId] : (isEnemy ? '#D32F2F' : '#2962FF');
     
-    // Adjust color based on kingdom
-    if (kingdomId !== null) {
-        if (isWall) {
-            // Walls use kingdom colors
-            baseColor = KINGDOM_COLORS[kingdomId];
-        } else if (isEnemy) {
-            // Enemy buildings have reddish tint but maintain kingdom color influence
-            const kingdomColor = KINGDOM_COLORS[kingdomId];
-            // Mix colors (simple average for now)
-            baseColor = '#B71C1C';
-        }
-    }
-    
-    // Different shapes for different buildings
     if (isWall) {
-        // Draw wall (special case for walls)
-        drawWall(x, y, baseColor, kingdomId);
+        drawWall(x, y, kingdomColor, kingdomId);
     } else {
+        // Draw shadow for 3D effect
+        gameCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        gameCtx.beginPath();
+        gameCtx.ellipse(x, y + 15, 25, 8, 0, 0, Math.PI * 2);
+        gameCtx.fill();
+        
         switch(buildingType) {
             case 'BARRACKS':
-                // Draw barracks base
-                gameCtx.fillStyle = isEnemy ? '#8E0000' : '#5D4037';
+                // Base structure with gradient
+                const barracksGradient = gameCtx.createLinearGradient(x - 24, y - 20, x + 24, y + 10);
+                barracksGradient.addColorStop(0, isEnemy ? '#C62828' : '#455A64');
+                barracksGradient.addColorStop(0.5, isEnemy ? '#B71C1C' : '#37474F');
+                barracksGradient.addColorStop(1, isEnemy ? '#7f0000' : '#263238');
+                
+                gameCtx.fillStyle = barracksGradient;
                 gameCtx.fillRect(x - 24, y - 20, 48, 30);
                 
-                // Draw barracks roof
-                gameCtx.fillStyle = isEnemy ? '#D50000' : '#BF360C';
+                // Roof with kingdom color
+                const roofGradient = gameCtx.createLinearGradient(x - 28, y - 25, x + 28, y - 5);
+                roofGradient.addColorStop(0, kingdomColor);
+                roofGradient.addColorStop(1, shadeColor(kingdomColor, -30));
+                
+                gameCtx.fillStyle = roofGradient;
                 gameCtx.beginPath();
                 gameCtx.moveTo(x - 28, y - 20);
-                gameCtx.lineTo(x, y - 40);
+                gameCtx.lineTo(x, y - 35);
                 gameCtx.lineTo(x + 28, y - 20);
+                gameCtx.lineTo(x + 24, y - 15);
+                gameCtx.lineTo(x - 24, y - 15);
                 gameCtx.closePath();
                 gameCtx.fill();
                 
-                // Draw door
-                gameCtx.fillStyle = '#3E2723';
+                // Window details
+                gameCtx.fillStyle = '#90A4AE';
+                gameCtx.fillRect(x - 15, y - 10, 5, 5);
+                gameCtx.fillRect(x + 10, y - 10, 5, 5);
+                
+                // Door
+                gameCtx.fillStyle = '#5D4037';
                 gameCtx.fillRect(x - 5, y, 10, 10);
                 
-                // Draw windows
-                gameCtx.fillStyle = '#FFF9C4';
-                gameCtx.fillRect(x - 15, y - 15, 6, 6);
-                gameCtx.fillRect(x + 10, y - 15, 6, 6);
-                
-                // Add flag with kingdom color
-                gameCtx.fillStyle = kingdomId !== null ? KINGDOM_COLORS[kingdomId] : '#B71C1C';
-                gameCtx.fillRect(x + 20, y - 40, 10, 6);
+                // Weapon rack
+                gameCtx.strokeStyle = '#BDBDBD';
+                gameCtx.lineWidth = 1;
+                gameCtx.beginPath();
+                gameCtx.moveTo(x + 15, y - 5);
+                gameCtx.lineTo(x + 15, y + 5);
+                gameCtx.moveTo(x + 12, y - 5);
+                gameCtx.lineTo(x + 12, y + 5);
+                gameCtx.stroke();
                 break;
-                
+            
             case 'MILL':
-                // Draw mill base
-                gameCtx.fillStyle = isEnemy ? '#8E0000' : '#8D6E63';
+                // Main mill structure
+                const millGradient = gameCtx.createLinearGradient(x - 18, y - 15, x + 18, y + 10);
+                millGradient.addColorStop(0, isEnemy ? '#A1887F' : '#8D6E63');
+                millGradient.addColorStop(1, isEnemy ? '#6D4C41' : '#5D4037');
+                
+                gameCtx.fillStyle = millGradient;
                 gameCtx.fillRect(x - 18, y - 15, 36, 25);
                 
-                // Draw roof
-                gameCtx.fillStyle = isEnemy ? '#D50000' : '#FFA000';
+                // Roof
+                const millRoofGradient = gameCtx.createLinearGradient(x - 22, y - 20, x + 22, y - 5);
+                millRoofGradient.addColorStop(0, '#795548');
+                millRoofGradient.addColorStop(1, '#4E342E');
+                
+                gameCtx.fillStyle = millRoofGradient;
                 gameCtx.beginPath();
                 gameCtx.moveTo(x - 22, y - 15);
-                gameCtx.lineTo(x, y - 35);
+                gameCtx.lineTo(x, y - 28);
                 gameCtx.lineTo(x + 22, y - 15);
                 gameCtx.closePath();
                 gameCtx.fill();
                 
-                // Draw windmill
-                gameCtx.strokeStyle = '#3E2723';
-                gameCtx.lineWidth = 2;
+                // Windmill blades
+                gameCtx.save();
+                gameCtx.translate(x, y - 40);
+                gameCtx.rotate(Date.now() / 1000 % (Math.PI * 2)); // Rotating animation
+                
+                // Draw 4 blades
+                for (let i = 0; i < 4; i++) {
+                    gameCtx.save();
+                    gameCtx.rotate(i * Math.PI / 2);
+                    
+                    // Blade
+                    gameCtx.fillStyle = '#E0E0E0';
+                    gameCtx.beginPath();
+                    gameCtx.moveTo(0, 0);
+                    gameCtx.lineTo(15, -3);
+                    gameCtx.lineTo(15, 3);
+                    gameCtx.closePath();
+                    gameCtx.fill();
+                    
+                    gameCtx.restore();
+                }
+                
+                // Center of blades
+                gameCtx.fillStyle = '#757575';
                 gameCtx.beginPath();
+                gameCtx.arc(0, 0, 3, 0, Math.PI * 2);
+                gameCtx.fill();
                 
-                // Draw central axis
-                gameCtx.moveTo(x, y - 50);
-                gameCtx.lineTo(x, y - 35);
+                gameCtx.restore();
                 
-                // Draw blades
-                gameCtx.moveTo(x, y - 45);
-                gameCtx.lineTo(x + 15, y - 55);
-                gameCtx.moveTo(x, y - 45);
-                gameCtx.lineTo(x - 15, y - 55);
-                gameCtx.moveTo(x, y - 45);
-                gameCtx.lineTo(x + 15, y - 35);
-                gameCtx.moveTo(x, y - 45);
-                gameCtx.lineTo(x - 15, y - 35);
+                // Pole for windmill
+                gameCtx.fillStyle = '#5D4037';
+                gameCtx.fillRect(x - 2, y - 40, 4, 25);
                 
-                gameCtx.stroke();
+                // Door
+                gameCtx.fillStyle = '#3E2723';
+                gameCtx.fillRect(x - 5, y + 5, 10, 10);
+                
+                // Windows
+                gameCtx.fillStyle = '#B3E5FC';
+                gameCtx.fillRect(x - 12, y - 8, 6, 6);
+                gameCtx.fillRect(x + 6, y - 8, 6, 6);
                 break;
                 
             case 'TOWER':
-                // Draw tower base
-                gameCtx.fillStyle = isEnemy ? '#8E0000' : '#616161';
+                // Main tower structure
+                const towerGradient = gameCtx.createLinearGradient(x - 15, y - 30, x + 15, y + 10);
+                towerGradient.addColorStop(0, isEnemy ? '#757575' : '#BDBDBD');
+                towerGradient.addColorStop(0.6, isEnemy ? '#616161' : '#9E9E9E');
+                towerGradient.addColorStop(1, isEnemy ? '#424242' : '#757575');
+                
+                // Base
+                gameCtx.fillStyle = towerGradient;
                 gameCtx.fillRect(x - 15, y - 10, 30, 20);
                 
-                // Draw tower middle
-                gameCtx.fillStyle = isEnemy ? '#B71C1C' : '#757575';
-                gameCtx.fillRect(x - 12, y - 30, 24, 20);
+                // Tower part
+                gameCtx.fillRect(x - 12, y - 40, 24, 30);
                 
-                // Draw tower top
-                gameCtx.fillStyle = isEnemy ? '#D50000' : '#9E9E9E';
+                // Tower top with crenellations
+                gameCtx.fillStyle = shadeColor(kingdomColor, -20);
+                gameCtx.fillRect(x - 14, y - 44, 28, 4);
+                
+                for (let i = 0; i < 4; i++) {
+                    gameCtx.fillRect(x - 12 + i * 8, y - 48, 4, 4);
+                }
+                
+                // Windows/archer slots
+                gameCtx.fillStyle = '#263238';
+                gameCtx.fillRect(x - 8, y - 35, 4, 6);
+                gameCtx.fillRect(x + 4, y - 35, 4, 6);
+                gameCtx.fillRect(x - 8, y - 25, 4, 6);
+                gameCtx.fillRect(x + 4, y - 25, 4, 6);
+                
+                // Door
+                gameCtx.fillStyle = '#5D4037';
                 gameCtx.beginPath();
-                gameCtx.moveTo(x - 15, y - 30);
-                gameCtx.lineTo(x, y - 50);
-                gameCtx.lineTo(x + 15, y - 30);
+                gameCtx.moveTo(x - 5, y + 10);
+                gameCtx.lineTo(x - 5, y);
+                gameCtx.lineTo(x + 5, y);
+                gameCtx.lineTo(x + 5, y + 10);
                 gameCtx.closePath();
                 gameCtx.fill();
                 
-                // Draw windows
-                gameCtx.fillStyle = '#263238';
-                gameCtx.fillRect(x - 6, y - 25, 4, 6);
-                gameCtx.fillRect(x + 2, y - 25, 4, 6);
+                // Flag on top
+                gameCtx.fillStyle = kingdomColor;
+                gameCtx.fillRect(x, y - 54, 1, 10);
                 
-                // Draw flag with kingdom color
-                gameCtx.fillStyle = kingdomId !== null ? KINGDOM_COLORS[kingdomId] : '#B71C1C';
-                gameCtx.fillRect(x, y - 55, 10, 5);
+                gameCtx.beginPath();
+                gameCtx.moveTo(x + 1, y - 54);
+                gameCtx.lineTo(x + 8, y - 52);
+                gameCtx.lineTo(x + 1, y - 50);
+                gameCtx.closePath();
+                gameCtx.fill();
                 break;
                 
             case 'HOUSE':
             default:
-                // Draw house base (walls)
-                gameCtx.fillStyle = isEnemy ? '#8E0000' : '#795548';
+                // House base with gradient
+                const wallGradient = gameCtx.createLinearGradient(x - 18, y - 12, x + 18, y + 10);
+                wallGradient.addColorStop(0, isEnemy ? '#A1887F' : '#D7CCC8');
+                wallGradient.addColorStop(1, isEnemy ? '#6D4C41' : '#A1887F');
+                
+                gameCtx.fillStyle = wallGradient;
                 gameCtx.fillRect(x - 18, y - 12, 36, 22);
                 
-                // Draw roof
-                gameCtx.fillStyle = isEnemy ? '#D50000' : '#D32F2F';
+                // Roof with kingdom color
+                const houseRoofGradient = gameCtx.createLinearGradient(x - 22, y - 25, x + 22, y - 5);
+                houseRoofGradient.addColorStop(0, kingdomColor);
+                houseRoofGradient.addColorStop(1, shadeColor(kingdomColor, -30));
+                
+                gameCtx.fillStyle = houseRoofGradient;
                 gameCtx.beginPath();
                 gameCtx.moveTo(x - 22, y - 12);
                 gameCtx.lineTo(x, y - 25);
@@ -1174,51 +1363,101 @@ function drawBuilding(x, y, buildingType, isEnemy = false, isWall = false, kingd
                 gameCtx.closePath();
                 gameCtx.fill();
                 
-                // Draw door
-                gameCtx.fillStyle = '#3E2723';
+                // Chimney
+                gameCtx.fillStyle = '#8D6E63';
+                gameCtx.fillRect(x + 10, y - 20, 6, 8);
+                
+                // Smoke (if active)
+                if (Math.random() > 0.7) {
+                    gameCtx.fillStyle = 'rgba(200, 200, 200, 0.5)';
+                    gameCtx.beginPath();
+                    gameCtx.arc(x + 13, y - 24, 2, 0, Math.PI * 2);
+                    gameCtx.arc(x + 15, y - 27, 2.5, 0, Math.PI * 2);
+                    gameCtx.arc(x + 13, y - 30, 3, 0, Math.PI * 2);
+                    gameCtx.fill();
+                }
+                
+                // Door
+                gameCtx.fillStyle = '#5D4037';
                 gameCtx.fillRect(x - 4, y, 8, 10);
                 
-                // Draw windows
+                // Door handle
+                gameCtx.fillStyle = '#FFD600';
+                gameCtx.beginPath();
+                gameCtx.arc(x + 2, y + 5, 1, 0, Math.PI * 2);
+                gameCtx.fill();
+                
+                // Windows with shading
                 gameCtx.fillStyle = '#B3E5FC';
                 gameCtx.fillRect(x + 8, y - 8, 6, 6);
                 gameCtx.fillRect(x - 14, y - 8, 6, 6);
+                
+                // Window frames
+                gameCtx.strokeStyle = '#5D4037';
+                gameCtx.lineWidth = 0.5;
+                gameCtx.strokeRect(x + 8, y - 8, 6, 6);
+                gameCtx.strokeRect(x - 14, y - 8, 6, 6);
+                
+                // Window dividers
+                gameCtx.beginPath();
+                gameCtx.moveTo(x + 11, y - 8);
+                gameCtx.lineTo(x + 11, y - 2);
+                gameCtx.moveTo(x + 8, y - 5);
+                gameCtx.lineTo(x + 14, y - 5);
+                
+                gameCtx.moveTo(x - 11, y - 8);
+                gameCtx.lineTo(x - 11, y - 2);
+                gameCtx.moveTo(x - 14, y - 5);
+                gameCtx.lineTo(x - 8, y - 5);
+                gameCtx.stroke();
                 break;
         }
     }
-    
-    // Draw building outline
-    gameCtx.strokeStyle = '#212121';
-    gameCtx.lineWidth = 1;
-    
-    // The outline depends on the building type
-    if (!isWall) {
-        switch(buildingType) {
-            case 'BARRACKS':
-                gameCtx.strokeRect(x - 24, y - 20, 48, 30);
-                break;
-            case 'MILL':
-                gameCtx.strokeRect(x - 18, y - 15, 36, 25);
-                break;
-            case 'TOWER':
-                gameCtx.strokeRect(x - 15, y - 10, 30, 20);
-                gameCtx.strokeRect(x - 12, y - 30, 24, 20);
-                break;
-            case 'HOUSE':
-            default:
-                gameCtx.strokeRect(x - 18, y - 12, 36, 22);
-                break;
-        }
-    }
+}
+
+// Helper function to shade a color (positive amount brightens, negative darkens)
+function shadeColor(color, percent) {
+    let R = parseInt(color.substring(1, 3), 16);
+    let G = parseInt(color.substring(3, 5), 16);
+    let B = parseInt(color.substring(5, 7), 16);
+
+    R = parseInt(R * (100 + percent) / 100);
+    G = parseInt(G * (100 + percent) / 100);
+    B = parseInt(B * (100 + percent) / 100);
+
+    R = (R < 255) ? R : 255;
+    G = (G < 255) ? G : 255;
+    B = (B < 255) ? B : 255;
+
+    R = (R > 0) ? R : 0;
+    G = (G > 0) ? G : 0;
+    B = (B > 0) ? B : 0;
+
+    const RR = ((R.toString(16).length == 1) ? "0" + R.toString(16) : R.toString(16));
+    const GG = ((G.toString(16).length == 1) ? "0" + G.toString(16) : G.toString(16));
+    const BB = ((B.toString(16).length == 1) ? "0" + B.toString(16) : B.toString(16));
+
+    return "#" + RR + GG + BB;
 }
 
 // Draw a wall segment
 function drawWall(x, y, color, kingdomId) {
     // Use kingdom color
     const wallColor = kingdomId !== null ? KINGDOM_COLORS[kingdomId] : color;
-    const stoneColor = '#8c8c8c'; // Stone-like color
     
-    // Draw wall base (stone texture)
-    gameCtx.fillStyle = stoneColor;
+    // Create shadow for 3D effect
+    gameCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    gameCtx.beginPath();
+    gameCtx.ellipse(x, y + 8, 16, 5, 0, 0, Math.PI * 2);
+    gameCtx.fill();
+    
+    // Main wall structure with gradient
+    const wallGradient = gameCtx.createLinearGradient(x - 15, y - 12, x + 15, y + 6);
+    wallGradient.addColorStop(0, '#A7A7A7');
+    wallGradient.addColorStop(0.5, '#8c8c8c');
+    wallGradient.addColorStop(1, '#6e6e6e');
+    
+    gameCtx.fillStyle = wallGradient;
     
     // Main wall structure (wider and more wall-like)
     gameCtx.beginPath();
@@ -1231,161 +1470,496 @@ function drawWall(x, y, color, kingdomId) {
     gameCtx.closePath();
     gameCtx.fill();
     
-    // Add stone texture pattern
-    gameCtx.strokeStyle = '#6e6e6e';
+    // Highlight on top edge
+    gameCtx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+    gameCtx.lineWidth = 1;
+    gameCtx.beginPath();
+    gameCtx.moveTo(x - 10, y - 12);
+    gameCtx.lineTo(x + 10, y - 12);
+    gameCtx.stroke();
+    
+    // Draw stone texture pattern
+    gameCtx.strokeStyle = '#5a5a5a';
     gameCtx.lineWidth = 0.5;
     
-    // Horizontal stone lines
-    gameCtx.beginPath();
-    gameCtx.moveTo(x - 14, y - 4);
-    gameCtx.lineTo(x + 14, y - 4);
-    gameCtx.stroke();
-    
-    gameCtx.beginPath();
-    gameCtx.moveTo(x - 12, y + 2);
-    gameCtx.lineTo(x + 12, y + 2);
-    gameCtx.stroke();
-    
-    // Vertical stone lines
-    for (let i = -12; i <= 12; i += 6) {
+    // Horizontal stone lines with slight irregularity
+    for (let i = -8; i <= 4; i += 6) {
         gameCtx.beginPath();
-        gameCtx.moveTo(x + i, y - 12);
-        gameCtx.lineTo(x + i, y + 6);
+        gameCtx.moveTo(x - 14, y + i);
+        
+        // Create wavy line effect for stone texture
+        for (let j = -14; j <= 14; j += 2) {
+            const variation = Math.random() * 0.8 - 0.4;
+            gameCtx.lineTo(x + j, y + i + variation);
+        }
+        
         gameCtx.stroke();
     }
     
-    // Draw crenellations (in kingdom color)
-    gameCtx.fillStyle = wallColor;
+    // Draw vertical stone lines with irregularity
+    for (let i = -12; i <= 12; i += 6) {
+        const offset = (Math.random() * 2 - 1);
+        gameCtx.beginPath();
+        gameCtx.moveTo(x + i + offset, y - 12);
+        
+        // Create irregular vertical lines
+        for (let j = -12; j <= 6; j += 2) {
+            const variation = Math.random() * 0.6 - 0.3;
+            gameCtx.lineTo(x + i + offset + variation, y + j);
+        }
+        
+        gameCtx.stroke();
+    }
     
-    // Top of wall with crenellations
-    // Left merlon
-    gameCtx.fillRect(x - 14, y - 18, 6, 6);
+    // Draw crenellations with kingdom color and gradient
+    const creGradient = gameCtx.createLinearGradient(x - 12, y - 17, x + 12, y - 12);
+    creGradient.addColorStop(0, wallColor);
+    creGradient.addColorStop(1, shadeColor(wallColor, -30));
     
-    // Center merlon
-    gameCtx.fillRect(x - 3, y - 18, 6, 6);
+    gameCtx.fillStyle = creGradient;
     
-    // Right merlon
-    gameCtx.fillRect(x + 8, y - 18, 6, 6);
+    // Draw crenellations (battlements) on top of the wall
+    for (let i = -9; i <= 9; i += 6) {
+        gameCtx.fillRect(x + i - 2, y - 15, 4, 3);
+    }
     
-    // Draw outlines
-    gameCtx.strokeStyle = '#000000';
-    gameCtx.lineWidth = 1;
-    
-    // Main wall outline
+    // Slight outline
+    gameCtx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+    gameCtx.lineWidth = 0.5;
     gameCtx.beginPath();
-    gameCtx.moveTo(x - 15, y);
-    gameCtx.lineTo(x - 10, y - 12);
-    gameCtx.lineTo(x + 10, y - 12);
-    gameCtx.lineTo(x + 15, y);
-    gameCtx.lineTo(x + 10, y + 6);
-    gameCtx.lineTo(x - 10, y + 6);
+    gameCtx.moveTo(x - 15, y);         // Left point
+    gameCtx.lineTo(x - 10, y - 12);     // Top-left
+    gameCtx.lineTo(x + 10, y - 12);     // Top-right
+    gameCtx.lineTo(x + 15, y);         // Right point
+    gameCtx.lineTo(x + 10, y + 6);     // Bottom-right
+    gameCtx.lineTo(x - 10, y + 6);     // Bottom-left
     gameCtx.closePath();
     gameCtx.stroke();
-    
-    // Crenellation outlines
-    gameCtx.strokeRect(x - 14, y - 18, 6, 6);
-    gameCtx.strokeRect(x - 3, y - 18, 6, 6);
-    gameCtx.strokeRect(x + 8, y - 18, 6, 6);
-    
-    // Add kingdom emblem
-    if (kingdomId !== null) {
-        gameCtx.fillStyle = '#FFFFFF';
-        gameCtx.beginPath();
-        gameCtx.arc(x, y - 8, 3, 0, Math.PI * 2);
-        gameCtx.fill();
-        gameCtx.strokeStyle = '#000000';
-        gameCtx.lineWidth = 0.5;
-        gameCtx.stroke();
-    }
 }
 
 // Draw player character
 function drawPlayer(x, y) {
-    // Draw player shadow
+    // Draw shadow
     gameCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
     gameCtx.beginPath();
-    gameCtx.ellipse(x, y + 8, 10, 5, 0, 0, Math.PI * 2);
+    gameCtx.ellipse(x, y + 12, 15, 5, 0, 0, Math.PI * 2);
     gameCtx.fill();
     
-    // Draw player body
-    gameCtx.fillStyle = '#2962FF';
+    // Body with gradient for depth
+    const bodyGradient = gameCtx.createLinearGradient(x - 8, y - 15, x + 8, y + 5);
+    bodyGradient.addColorStop(0, '#1976D2');
+    bodyGradient.addColorStop(0.7, '#0D47A1');
+    bodyGradient.addColorStop(1, '#0D47A1');
+    
+    gameCtx.fillStyle = bodyGradient;
     gameCtx.beginPath();
-    gameCtx.arc(x, y - 5, 8, 0, Math.PI * 2);
+    gameCtx.moveTo(x, y - 5);
+    gameCtx.lineTo(x + 8, y + 5);
+    gameCtx.lineTo(x - 8, y + 5);
+    gameCtx.closePath();
     gameCtx.fill();
     
-    // Draw player head
-    gameCtx.fillStyle = '#FFA726';
+    // Armor plate with metallic gradient
+    const armorGradient = gameCtx.createLinearGradient(x - 6, y - 12, x + 6, y - 3);
+    armorGradient.addColorStop(0, '#2962FF');
+    armorGradient.addColorStop(0.5, '#82B1FF');
+    armorGradient.addColorStop(1, '#2962FF');
+    
+    gameCtx.fillStyle = armorGradient;
     gameCtx.beginPath();
-    gameCtx.arc(x, y - 12, 5, 0, Math.PI * 2);
+    gameCtx.moveTo(x, y - 15);
+    gameCtx.lineTo(x + 6, y - 5);
+    gameCtx.lineTo(x - 6, y - 5);
+    gameCtx.closePath();
     gameCtx.fill();
     
-    // Draw outline
-    gameCtx.strokeStyle = '#0D47A1';
-    gameCtx.lineWidth = 1;
+    // Head
+    gameCtx.fillStyle = '#FFD54F';
     gameCtx.beginPath();
-    gameCtx.arc(x, y - 5, 8, 0, Math.PI * 2);
+    gameCtx.arc(x, y - 20, 6, 0, Math.PI * 2);
+    gameCtx.fill();
+    
+    // Arms
+    gameCtx.fillStyle = '#1565C0';
+    gameCtx.beginPath();
+    gameCtx.moveTo(x - 5, y - 10);
+    gameCtx.lineTo(x - 12, y - 5);
+    gameCtx.lineTo(x - 10, y - 2);
+    gameCtx.lineTo(x - 3, y - 7);
+    gameCtx.closePath();
+    gameCtx.fill();
+    
+    gameCtx.beginPath();
+    gameCtx.moveTo(x + 5, y - 10);
+    gameCtx.lineTo(x + 12, y - 5);
+    gameCtx.lineTo(x + 10, y - 2);
+    gameCtx.lineTo(x + 3, y - 7);
+    gameCtx.closePath();
+    gameCtx.fill();
+    
+    // Shield or weapon based on age/technology
+    if (gameState.currentAge >= 1) {
+        // Shield
+        const shieldGradient = gameCtx.createLinearGradient(x - 15, y - 10, x - 5, y);
+        shieldGradient.addColorStop(0, '#EF5350');
+        shieldGradient.addColorStop(1, '#B71C1C');
+        
+        gameCtx.fillStyle = shieldGradient;
+        gameCtx.beginPath();
+        gameCtx.moveTo(x - 14, y - 10);
+        gameCtx.lineTo(x - 16, y - 5);
+        gameCtx.lineTo(x - 14, y);
+        gameCtx.lineTo(x - 10, y - 2);
+        gameCtx.lineTo(x - 10, y - 8);
+        gameCtx.closePath();
+        gameCtx.fill();
+        
+        // Shield emblem
+        gameCtx.fillStyle = '#FFD54F';
+        gameCtx.beginPath();
+        gameCtx.arc(x - 13, y - 5, 2, 0, Math.PI * 2);
+        gameCtx.fill();
+    }
+    
+    if (gameState.currentAge >= 2) {
+        // Sword
+        gameCtx.fillStyle = '#BDBDBD';
+        gameCtx.beginPath();
+        gameCtx.moveTo(x + 14, y - 12);
+        gameCtx.lineTo(x + 16, y - 5);
+        gameCtx.lineTo(x + 14, y - 3);
+        gameCtx.lineTo(x + 12, y - 10);
+        gameCtx.closePath();
+        gameCtx.fill();
+        
+        // Sword handle
+        gameCtx.fillStyle = '#5D4037';
+        gameCtx.fillRect(x + 13, y - 3, 2, 4);
+    }
+    
+    // Add a subtle outline
+    gameCtx.strokeStyle = '#000000';
+    gameCtx.lineWidth = 0.5;
+    
+    // Outline body
+    gameCtx.beginPath();
+    gameCtx.moveTo(x, y - 5);
+    gameCtx.lineTo(x + 8, y + 5);
+    gameCtx.lineTo(x - 8, y + 5);
+    gameCtx.closePath();
     gameCtx.stroke();
+    
+    // Outline armor
     gameCtx.beginPath();
-    gameCtx.arc(x, y - 12, 5, 0, Math.PI * 2);
+    gameCtx.moveTo(x, y - 15);
+    gameCtx.lineTo(x + 6, y - 5);
+    gameCtx.lineTo(x - 6, y - 5);
+    gameCtx.closePath();
     gameCtx.stroke();
     
-    // Draw health bar
-    const healthPercent = gameState.player.health / 100;
-    const barWidth = 20;
+    // Outline head
+    gameCtx.beginPath();
+    gameCtx.arc(x, y - 20, 6, 0, Math.PI * 2);
+    gameCtx.stroke();
+    
+    // Face features
+    gameCtx.fillStyle = '#000';
+    gameCtx.beginPath();
+    gameCtx.arc(x - 2, y - 21, 1, 0, Math.PI * 2); // Left eye
+    gameCtx.arc(x + 2, y - 21, 1, 0, Math.PI * 2); // Right eye
+    gameCtx.fill();
+    
+    // Animation effect - slight up and down bobbing
+    if (gameState.playerMoving) {
+        const bobAmount = Math.sin(Date.now() / 150) * 2;
+        gameCtx.translate(0, bobAmount);
+        // Reset translation after drawing
+        gameCtx.translate(0, -bobAmount);
+    }
+    
+    // Health bar
+    const healthPercent = gameState.player.health / gameState.player.maxHealth;
+    const barWidth = 30;
+    const barHeight = 4;
     
     // Background
-    gameCtx.fillStyle = '#333333';
-    gameCtx.fillRect(x - barWidth/2, y - 25, barWidth, 3);
+    gameCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    gameCtx.fillRect(x - barWidth / 2, y - 30, barWidth, barHeight);
     
-    // Health amount
-    gameCtx.fillStyle = healthPercent > 0.5 ? '#4CAF50' : healthPercent > 0.25 ? '#FFC107' : '#F44336';
-    gameCtx.fillRect(x - barWidth/2, y - 25, barWidth * healthPercent, 3);
+    // Health amount with color based on health percentage
+    let healthColor;
+    if (healthPercent > 0.7) {
+        healthColor = '#4CAF50'; // Green for good health
+    } else if (healthPercent > 0.3) {
+        healthColor = '#FFC107'; // Yellow for medium health
+    } else {
+        healthColor = '#F44336'; // Red for low health
+    }
+    
+    gameCtx.fillStyle = healthColor;
+    gameCtx.fillRect(x - barWidth / 2, y - 30, barWidth * healthPercent, barHeight);
 }
 
-// Draw enemy character
+// Draw enemy
 function drawEnemy(x, y, enemyType, health, kingdomId) {
     const enemyInfo = ENEMY_TYPES[enemyType];
     
-    // Draw enemy shadow
-    gameCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    gameCtx.beginPath();
-    gameCtx.ellipse(x, y + 8, 10, 5, 0, 0, Math.PI * 2);
-    gameCtx.fill();
+    // Get enemies on this tile
+    const enemiesOnTile = gameState.enemies.filter(e => e.x === Math.floor(x) && e.y === Math.floor(y));
+    const enemyCount = enemiesOnTile.length;
     
-    // Draw enemy body
-    gameCtx.fillStyle = enemyInfo.color;
-    gameCtx.beginPath();
-    gameCtx.arc(x, y - 5, 8, 0, Math.PI * 2);
-    gameCtx.fill();
-    
-    // Draw enemy head
-    gameCtx.fillStyle = '#333333';
-    gameCtx.beginPath();
-    gameCtx.arc(x, y - 12, 5, 0, Math.PI * 2);
-    gameCtx.fill();
-    
-    // Draw outline
-    gameCtx.strokeStyle = '#000000';
-    gameCtx.lineWidth = 1;
-    gameCtx.beginPath();
-    gameCtx.arc(x, y - 5, 8, 0, Math.PI * 2);
-    gameCtx.stroke();
-    gameCtx.beginPath();
-    gameCtx.arc(x, y - 12, 5, 0, Math.PI * 2);
-    gameCtx.stroke();
-    
-    // Draw health bar
-    const maxHealth = ENEMY_TYPES[enemyType].health;
-    const healthPercent = health / maxHealth;
-    const barWidth = 20;
-    
-    // Background
-    gameCtx.fillStyle = '#333333';
-    gameCtx.fillRect(x - barWidth/2, y - 25, barWidth, 3);
-    
-    // Health amount
-    gameCtx.fillStyle = healthPercent > 0.5 ? '#4CAF50' : healthPercent > 0.25 ? '#FFC107' : '#F44336';
-    gameCtx.fillRect(x - barWidth/2, y - 25, barWidth * healthPercent, 3);
+    // If multiple enemies on tile, draw differently
+    if (enemyCount > 1) {
+        // Calculate total health
+        let totalHealth = 0;
+        let maxPossibleHealth = 0;
+        
+        for (const e of enemiesOnTile) {
+            totalHealth += e.health;
+            maxPossibleHealth += ENEMY_TYPES[e.type].health;
+        }
+        
+        // Draw shadow
+        gameCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        gameCtx.beginPath();
+        gameCtx.ellipse(x, y + 8, 15, 5, 0, 0, Math.PI * 2);
+        gameCtx.fill();
+        
+        // Draw group indicator with kingdom color
+        const kingdomColor = KINGDOM_COLORS[kingdomId] || enemyInfo.color;
+        const groupGradient = gameCtx.createRadialGradient(x, y - 5, 0, x, y - 5, 12);
+        groupGradient.addColorStop(0, lightenColor(kingdomColor, 20));
+        groupGradient.addColorStop(1, darkenColor(kingdomColor, 20));
+        
+        gameCtx.fillStyle = groupGradient;
+        gameCtx.beginPath();
+        gameCtx.arc(x, y - 5, 12, 0, Math.PI * 2);
+        gameCtx.fill();
+        
+        // Draw outline
+        gameCtx.strokeStyle = '#000000';
+        gameCtx.lineWidth = 1;
+        gameCtx.stroke();
+        
+        // Draw count with glow effect
+        gameCtx.fillStyle = '#FFFFFF';
+        gameCtx.font = 'bold 12px Arial';
+        gameCtx.textAlign = 'center';
+        gameCtx.textBaseline = 'middle';
+        
+        // Text shadow for better visibility
+        gameCtx.shadowColor = '#000000';
+        gameCtx.shadowBlur = 4;
+        gameCtx.shadowOffsetX = 0;
+        gameCtx.shadowOffsetY = 0;
+        
+        gameCtx.fillText(enemyCount.toString(), x, y - 5);
+        
+        // Reset shadow
+        gameCtx.shadowBlur = 0;
+        
+        // Draw health bar
+        const healthPercent = totalHealth / maxPossibleHealth;
+        const barWidth = 30;
+        const barHeight = 4;
+        
+        // Background
+        gameCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        gameCtx.fillRect(x - barWidth/2, y - 22, barWidth, barHeight);
+        
+        // Health amount
+        let healthColor;
+        if (healthPercent > 0.7) {
+            healthColor = '#4CAF50'; // Green for good health
+        } else if (healthPercent > 0.3) {
+            healthColor = '#FFC107'; // Yellow for medium health
+        } else {
+            healthColor = '#F44336'; // Red for low health
+        }
+        
+        gameCtx.fillStyle = healthColor;
+        gameCtx.fillRect(x - barWidth/2, y - 22, barWidth * healthPercent, barHeight);
+    } else {
+        // Draw shadow
+        gameCtx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        gameCtx.beginPath();
+        gameCtx.ellipse(x, y + 10, 12, 4, 0, 0, Math.PI * 2);
+        gameCtx.fill();
+        
+        // Kingdom color based on enemy's kingdom
+        const kingdomColor = KINGDOM_COLORS[kingdomId] || enemyInfo.color;
+        
+        // For warriors vs archers, draw differently
+        if (enemyType === 'WARRIOR') {
+            // Body with gradient
+            const bodyGradient = gameCtx.createLinearGradient(x - 8, y - 12, x + 8, y + 5);
+            bodyGradient.addColorStop(0, lightenColor(kingdomColor, 10));
+            bodyGradient.addColorStop(0.7, kingdomColor);
+            bodyGradient.addColorStop(1, darkenColor(kingdomColor, 20));
+            
+            gameCtx.fillStyle = bodyGradient;
+            gameCtx.beginPath();
+            gameCtx.moveTo(x, y - 5);
+            gameCtx.lineTo(x + 7, y + 5);
+            gameCtx.lineTo(x - 7, y + 5);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Chest plate/armor
+            const armorGradient = gameCtx.createLinearGradient(x - 6, y - 15, x + 6, y - 3);
+            armorGradient.addColorStop(0, lightenColor(kingdomColor, 20));
+            armorGradient.addColorStop(0.5, '#AAAAAA');
+            armorGradient.addColorStop(1, darkenColor(kingdomColor, 10));
+            
+            gameCtx.fillStyle = armorGradient;
+            gameCtx.beginPath();
+            gameCtx.moveTo(x, y - 12);
+            gameCtx.lineTo(x + 5, y - 4);
+            gameCtx.lineTo(x - 5, y - 4);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Head
+            gameCtx.fillStyle = '#FFD54F';
+            gameCtx.beginPath();
+            gameCtx.arc(x, y - 17, 5, 0, Math.PI * 2);
+            gameCtx.fill();
+            
+            // Helmet
+            gameCtx.fillStyle = darkenColor(kingdomColor, 30);
+            gameCtx.beginPath();
+            gameCtx.arc(x, y - 19, 3, 0, Math.PI, true);
+            gameCtx.fill();
+            
+            // Sword
+            gameCtx.fillStyle = '#BDBDBD';
+            gameCtx.beginPath();
+            gameCtx.moveTo(x + 9, y - 8);
+            gameCtx.lineTo(x + 15, y - 15);
+            gameCtx.lineTo(x + 13, y - 17);
+            gameCtx.lineTo(x + 7, y - 10);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Sword handle
+            gameCtx.fillStyle = '#5D4037';
+            gameCtx.fillRect(x + 6, y - 6, 3, 4);
+            
+        } else if (enemyType === 'ARCHER') {
+            // Archer body with lighter appearance
+            const bodyGradient = gameCtx.createLinearGradient(x - 8, y - 12, x + 8, y + 5);
+            bodyGradient.addColorStop(0, lightenColor(kingdomColor, 15));
+            bodyGradient.addColorStop(0.7, kingdomColor);
+            bodyGradient.addColorStop(1, darkenColor(kingdomColor, 15));
+            
+            gameCtx.fillStyle = bodyGradient;
+            gameCtx.beginPath();
+            gameCtx.moveTo(x, y - 5);
+            gameCtx.lineTo(x + 6, y + 5);
+            gameCtx.lineTo(x - 6, y + 5);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Lighter clothing
+            gameCtx.fillStyle = lightenColor(kingdomColor, 30);
+            gameCtx.beginPath();
+            gameCtx.moveTo(x, y - 12);
+            gameCtx.lineTo(x + 4, y - 4);
+            gameCtx.lineTo(x - 4, y - 4);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Head
+            gameCtx.fillStyle = '#FFD54F';
+            gameCtx.beginPath();
+            gameCtx.arc(x, y - 17, 5, 0, Math.PI * 2);
+            gameCtx.fill();
+            
+            // Hood
+            gameCtx.fillStyle = darkenColor(kingdomColor, 20);
+            gameCtx.beginPath();
+            gameCtx.arc(x, y - 17, 5, 0, Math.PI, true);
+            gameCtx.closePath();
+            gameCtx.fill();
+            
+            // Bow
+            gameCtx.strokeStyle = '#5D4037';
+            gameCtx.lineWidth = 1.5;
+            gameCtx.beginPath();
+            gameCtx.arc(x + 10, y - 10, 8, -Math.PI/3, Math.PI/3);
+            gameCtx.stroke();
+            
+            // Bow string
+            gameCtx.strokeStyle = '#E0E0E0';
+            gameCtx.lineWidth = 0.5;
+            gameCtx.beginPath();
+            gameCtx.moveTo(x + 10 + 8 * Math.cos(-Math.PI/3), y - 10 + 8 * Math.sin(-Math.PI/3));
+            gameCtx.lineTo(x + 10 + 8 * Math.cos(Math.PI/3), y - 10 + 8 * Math.sin(Math.PI/3));
+            gameCtx.stroke();
+            
+            // Arrow
+            gameCtx.strokeStyle = '#795548';
+            gameCtx.lineWidth = 1;
+            gameCtx.beginPath();
+            gameCtx.moveTo(x + 6, y - 10);
+            gameCtx.lineTo(x + 14, y - 10);
+            gameCtx.stroke();
+            
+            // Arrow head
+            gameCtx.fillStyle = '#BDBDBD';
+            gameCtx.beginPath();
+            gameCtx.moveTo(x + 14, y - 10);
+            gameCtx.lineTo(x + 17, y - 12);
+            gameCtx.lineTo(x + 17, y - 8);
+            gameCtx.closePath();
+            gameCtx.fill();
+        }
+        
+        // Face features
+        gameCtx.fillStyle = '#000';
+        gameCtx.beginPath();
+        gameCtx.arc(x - 2, y - 18, 1, 0, Math.PI * 2); // Left eye
+        gameCtx.arc(x + 2, y - 18, 1, 0, Math.PI * 2); // Right eye
+        gameCtx.fill();
+        
+        // Add a subtle outline
+        gameCtx.strokeStyle = '#000000';
+        gameCtx.lineWidth = 0.5;
+        gameCtx.beginPath();
+        gameCtx.arc(x, y - 17, 5, 0, Math.PI * 2);
+        gameCtx.stroke();
+        
+        // Health bar
+        const healthPercent = health / enemyInfo.health;
+        const barWidth = 25;
+        const barHeight = 3;
+        
+        // Background
+        gameCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        gameCtx.fillRect(x - barWidth/2, y - 27, barWidth, barHeight);
+        
+        // Health amount
+        let healthColor;
+        if (healthPercent > 0.7) {
+            healthColor = '#4CAF50'; // Green for good health
+        } else if (healthPercent > 0.3) {
+            healthColor = '#FFC107'; // Yellow for medium health
+        } else {
+            healthColor = '#F44336'; // Red for low health
+        }
+        
+        gameCtx.fillStyle = healthColor;
+        gameCtx.fillRect(x - barWidth/2, y - 27, barWidth * healthPercent, barHeight);
+    }
+}
+
+// Helper functions for colors
+function lightenColor(color, percent) {
+    return shadeColor(color, percent);
+}
+
+function darkenColor(color, percent) {
+    return shadeColor(color, -percent);
 }
 
 // Draw soldiers
@@ -1515,57 +2089,136 @@ function drawMinimap() {
     // Clear minimap
     minimapCtx.clearRect(0, 0, minimapCanvas.width, minimapCanvas.height);
     
+    // Draw background
+    const mapBackground = minimapCtx.createLinearGradient(0, 0, minimapCanvas.width, minimapCanvas.height);
+    mapBackground.addColorStop(0, '#234723');
+    mapBackground.addColorStop(1, '#1B5E20');
+    
+    minimapCtx.fillStyle = mapBackground;
+    minimapCtx.fillRect(0, 0, minimapCanvas.width, minimapCanvas.height);
+    
     // Calculate tile size on minimap
     const tileSize = minimapCanvas.width / MAP_SIZE;
     
-    // Draw each tile on minimap
+    // Draw territories with soft borders
     for (let y = 0; y < MAP_SIZE; y++) {
         for (let x = 0; x < MAP_SIZE; x++) {
             const tile = gameState.map[y][x];
             
-            // Set color based on tile type
-            if (tile.type === TILE_TYPES.GRASS) {
-                minimapCtx.fillStyle = '#4cae4c';
-            } else {
-                minimapCtx.fillStyle = '#eea236';
-            }
-            
-            // Draw tile on minimap
-            minimapCtx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
-            
-            // Draw resources with small dots
-            if (tile.resource) {
-                if (tile.resource === 'TREE') {
-                    minimapCtx.fillStyle = '#2E7D32';
-                } else if (tile.resource === 'STONE') {
-                    minimapCtx.fillStyle = '#757575';
-                } else {
-                    minimapCtx.fillStyle = '#E91E63';
-                }
-                minimapCtx.fillRect(x * tileSize + tileSize/4, y * tileSize + tileSize/4, tileSize/2, tileSize/2);
-            }
-            
-            // Draw buildings with small squares
-            if (tile.building) {
-                // Check if it's an enemy building
-                const isEnemyBuilding = gameState.enemyBuildings.some(b => b.x === x && b.y === y);
+            if (tile.territory !== null) {
+                const territoryColor = KINGDOM_COLORS[tile.territory];
                 
-                minimapCtx.fillStyle = isEnemyBuilding ? '#B71C1C' : BUILDING_TYPES[tile.building].color;
-                minimapCtx.fillRect(x * tileSize + tileSize/4, y * tileSize + tileSize/4, tileSize/2, tileSize/2);
+                // Make territory colors semi-transparent for better appearance
+                minimapCtx.fillStyle = hexToRgba(territoryColor, 0.4);
+                minimapCtx.fillRect(
+                    x * tileSize,
+                    y * tileSize,
+                    tileSize,
+                    tileSize
+                );
+                
+                // If it's a capital, mark it with a special indicator
+                if (tile.isCapital) {
+                    minimapCtx.fillStyle = hexToRgba(territoryColor, 0.9);
+                    minimapCtx.beginPath();
+                    minimapCtx.arc(
+                        x * tileSize + tileSize/2,
+                        y * tileSize + tileSize/2,
+                        tileSize * 1.5, 0, Math.PI * 2
+                    );
+                    minimapCtx.fill();
+                }
             }
         }
     }
     
-    // Draw enemies on minimap
+    // Draw terrain features with dot patterns
+    for (let y = 0; y < MAP_SIZE; y += 2) {
+        for (let x = 0; x < MAP_SIZE; x += 2) {
+            const tile = gameState.map[y][x];
+            
+            // Draw resources with distinct colors
+            if (tile.resource) {
+                let resourceColor;
+                switch (tile.resource) {
+                    case 'TREE':
+                        resourceColor = '#2E7D32';
+                        break;
+                    case 'STONE':
+                        resourceColor = '#78909C';
+                        break;
+                    case 'BERRY':
+                        resourceColor = '#C2185B';
+                        break;
+                }
+                
+                minimapCtx.fillStyle = resourceColor;
+                minimapCtx.beginPath();
+                minimapCtx.rect(
+                    x * tileSize,
+                    y * tileSize,
+                    tileSize,
+                    tileSize
+                );
+                minimapCtx.fill();
+            }
+            
+            // Show buildings with brighter dots
+            if (tile.building && !tile.isWall) {
+                const buildingColor = tile.territory !== null ? 
+                    KINGDOM_COLORS[tile.territory] : '#FFFFFF';
+                
+                minimapCtx.fillStyle = buildingColor;
+                minimapCtx.beginPath();
+                minimapCtx.arc(
+                    x * tileSize + tileSize/2,
+                    y * tileSize + tileSize/2,
+                    tileSize * 0.8, 0, Math.PI * 2
+                );
+                minimapCtx.fill();
+            }
+        }
+    }
+    
+    // Draw walls with distinct line style
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const tile = gameState.map[y][x];
+            
+            if (tile.isWall) {
+                const wallColor = tile.territory !== null ? 
+                    KINGDOM_COLORS[tile.territory] : '#FFFFFF';
+                
+                minimapCtx.fillStyle = wallColor;
+                minimapCtx.fillRect(
+                    x * tileSize,
+                    y * tileSize,
+                    tileSize,
+                    tileSize
+                );
+            }
+        }
+    }
+    
+    // Draw enemies on minimap with pulsing effect
+    const now = Date.now();
     for (const enemy of gameState.enemies) {
-        minimapCtx.fillStyle = '#D32F2F'; // Red for enemies
+        // Create pulsing effect for enemies
+        const pulseSize = 0.7 + Math.sin(now / 300) * 0.3;
+        
+        minimapCtx.fillStyle = KINGDOM_COLORS[enemy.kingdomId];
         minimapCtx.beginPath();
         minimapCtx.arc(
             enemy.x * tileSize + tileSize/2,
             enemy.y * tileSize + tileSize/2,
-            tileSize * 0.7, 0, Math.PI * 2
+            tileSize * pulseSize, 0, Math.PI * 2
         );
         minimapCtx.fill();
+        
+        // Add enemy outline
+        minimapCtx.strokeStyle = '#000';
+        minimapCtx.lineWidth = 0.5;
+        minimapCtx.stroke();
     }
     
     // Draw soldiers on minimap
@@ -1575,14 +2228,17 @@ function drawMinimap() {
         minimapCtx.arc(
             soldier.x * tileSize + tileSize/2,
             soldier.y * tileSize + tileSize/2,
-            tileSize * 0.5, 0, Math.PI * 2
+            tileSize * 0.6, 0, Math.PI * 2
         );
         minimapCtx.fill();
     }
     
-    // Draw camera viewport rectangle
+    // Draw camera viewport rectangle with animated dash effect
     minimapCtx.strokeStyle = '#FFFFFF';
     minimapCtx.lineWidth = 2;
+    minimapCtx.setLineDash([4, 2]);
+    minimapCtx.lineDashOffset = -now / 100; // Animate the dash pattern
+    
     minimapCtx.strokeRect(
         gameState.camera.x * tileSize,
         gameState.camera.y * tileSize,
@@ -1590,20 +2246,58 @@ function drawMinimap() {
         VISIBLE_TILES * tileSize
     );
     
-    // Draw player position (with larger, more visible circle)
-    minimapCtx.fillStyle = '#FF0000'; // Bright red for better visibility
+    // Reset line dash
+    minimapCtx.setLineDash([]);
+    
+    // Draw player position with glowing effect
+    const glowSize = 1.2 + Math.sin(now / 500) * 0.3;
+    
+    // Outer glow
+    const gradient = minimapCtx.createRadialGradient(
+        gameState.player.x * tileSize + tileSize/2,
+        gameState.player.y * tileSize + tileSize/2,
+        0,
+        gameState.player.x * tileSize + tileSize/2,
+        gameState.player.y * tileSize + tileSize/2,
+        tileSize * 2.5 * glowSize
+    );
+    
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+    gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
+    gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    
+    minimapCtx.fillStyle = gradient;
     minimapCtx.beginPath();
     minimapCtx.arc(
         gameState.player.x * tileSize + tileSize/2,
         gameState.player.y * tileSize + tileSize/2,
-        tileSize * 1.5, 0, Math.PI * 2
+        tileSize * 2.5 * glowSize, 0, Math.PI * 2
     );
     minimapCtx.fill();
     
-    // Add stroke for better visibility
+    // Inner player marker
+    minimapCtx.fillStyle = '#FF5252';
+    minimapCtx.beginPath();
+    minimapCtx.arc(
+        gameState.player.x * tileSize + tileSize/2,
+        gameState.player.y * tileSize + tileSize/2,
+        tileSize * 1.2, 0, Math.PI * 2
+    );
+    minimapCtx.fill();
+    
+    // Add a white border
     minimapCtx.strokeStyle = '#FFFFFF';
     minimapCtx.lineWidth = 1;
     minimapCtx.stroke();
+}
+
+// Helper function to convert hex color to rgba
+function hexToRgba(hex, alpha) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 // Update UI elements
@@ -1659,8 +2353,21 @@ function updateUI() {
         resourcesDiv.appendChild(soldiersContainer);
     }
     
-    // Update health display
-    document.getElementById('player-health').textContent = `${gameState.player.health}/100`;
+    // Ensure player health is a valid number and capped between 0-100
+    if (isNaN(gameState.player.health)) {
+        gameState.player.health = 100;
+    }
+    
+    // Ensure player has a maxHealth property
+    if (!gameState.player.maxHealth) {
+        gameState.player.maxHealth = 100;
+    }
+    
+    // Cap health at maxHealth
+    gameState.player.health = Math.max(0, Math.min(gameState.player.maxHealth, gameState.player.health));
+    
+    // Update health display with actual maxHealth
+    document.getElementById('player-health').textContent = `${Math.floor(gameState.player.health)}/${gameState.player.maxHealth}`;
     
     // Update soldiers count
     document.getElementById('soldiers-count').textContent = gameState.population.soldiers;
@@ -2683,17 +3390,48 @@ function updateEnemies(deltaTime) {
             let moveX = 0;
             let moveY = 0;
             
-            // Enemy becomes aggressive if player is close to kingdom or if targeting player
-            const baseAggressionDistance = 15; // Distance at which enemies become aggressive
+            // Enemy becomes aggressive based on several factors
+            const baseAggressionDistance = 15; // Distance at which normal enemies become aggressive
             
             // Make enemies more likely to become aggressive as game progresses
-            const gameTime = gameState.gameTime / (60 * 1000); // Minutes of game time
-            const timeBasedAggressionBonus = Math.min(10, gameTime / 2); // Up to 10 bonus tiles of awareness as time passes
+            const gameTime = gameState.gameTime / (60 * 1000);
+            const timeBasedAggressionBonus = Math.min(10, gameTime / 2); // Up to 10 bonus tiles of awareness
             
-            if (!enemy.isAggressive) {
+            // Soldiers from barracks are naturally more aggressive (higher awareness range)
+            const soldierAwarenessBonus = enemy.type && (enemy.type === 'WARRIOR' || enemy.type === 'ARCHER') ? 10 : 0;
+            
+            // Calculate final aggression distance
+            const finalAggressionDistance = baseAggressionDistance + timeBasedAggressionBonus + soldierAwarenessBonus;
+            
+            // Check if enemy is significantly weaker than player and should flee
+            const shouldFlee = distToPlayer < finalAggressionDistance && calculateRelativeStrength(enemy) < 0.8;
+            
+            if (shouldFlee) {
+                // Enemy is weaker and should flee
+                enemy.isFleeing = true;
+                enemy.isAggressive = false;
+                enemy.attackPath = null;
+                
+                // Move away from player
+                moveX = enemy.x > gameState.player.x ? 1 : (enemy.x < gameState.player.x ? -1 : 0);
+                moveY = enemy.y > gameState.player.y ? 1 : (enemy.y < gameState.player.y ? -1 : 0);
+                
+                // Move faster when fleeing
+                if (Math.random() < 0.3) {
+                    enemy.lastMoved = -enemy.moveDelay * 0.3;
+                }
+            } else if (!enemy.isAggressive) {
+                // Reset fleeing status if not close to player
+                enemy.isFleeing = false;
+                
                 // Check if player is within aggression range or enemy was set to target player
-                if (distToPlayer < (baseAggressionDistance + timeBasedAggressionBonus) || enemy.isTargetingPlayer) {
+                if (distToPlayer < finalAggressionDistance || enemy.isTargetingPlayer) {
                     enemy.isAggressive = true;
+                    
+                    // Soldiers have a chance to create a direct path to player when activated
+                    if ((enemy.type === 'WARRIOR' || enemy.type === 'ARCHER') && Math.random() < 0.7) {
+                        createEnemyAttackPath(enemy);
+                    }
                 }
                 
                 // Also small random chance to become aggressive regardless of distance
@@ -2702,10 +3440,15 @@ function updateEnemies(deltaTime) {
                 }
             }
             
-            // If aggressive, target player
-            if (enemy.isAggressive) {
+            // If aggressive and not fleeing, target player
+            if (enemy.isAggressive && !enemy.isFleeing) {
+                // If this enemy is targeting player but doesn't have a path, create one sometimes
+                if (enemy.isTargetingPlayer && !enemy.attackPath && Math.random() < 0.1) {
+                    createEnemyAttackPath(enemy);
+                }
+                
                 // Add some randomness to aggressive enemies to make them less predictable
-                const targetingRandomness = 0.2; // 20% chance to move randomly despite being aggressive
+                const targetingRandomness = enemy.type === 'WARRIOR' ? 0.1 : 0.2; // Warriors more focused
                 
                 if (Math.random() < targetingRandomness) {
                     // Random movement for unpredictability
@@ -2722,7 +3465,7 @@ function updateEnemies(deltaTime) {
                     // Reset movement timer for faster movement
                     enemy.lastMoved = -enemy.moveDelay * 0.5;
                 }
-            } else {
+            } else if (!enemy.isFleeing) {
                 // Non-aggressive behavior - mostly random movement within own territory
                 const moveRandomly = Math.random() < 0.7;
                 
@@ -2787,7 +3530,7 @@ function updateEnemies(deltaTime) {
                     // Don't move onto player's buildings
                     if (!tile.building || tile.territory !== 0) {
                         // Aggressive enemies can wander outside territory
-                        if (enemy.isAggressive || tile.territory === enemy.kingdomId || tile.territory === null) {
+                        if (enemy.isAggressive || enemy.isFleeing || tile.territory === enemy.kingdomId || tile.territory === null) {
                             enemy.x = newX;
                             enemy.y = newY;
                             
@@ -2795,7 +3538,7 @@ function updateEnemies(deltaTime) {
                             const dx = Math.abs(enemy.x - gameState.player.x);
                             const dy = Math.abs(enemy.y - gameState.player.y);
                             
-                            if (dx <= 1 && dy <= 1 && enemy.isAggressive) {
+                            if (dx <= 1 && dy <= 1 && enemy.isAggressive && !enemy.isFleeing) {
                                 // Enemy attacks player
                                 enemyAttackPlayer(enemy);
                             }
@@ -2805,6 +3548,60 @@ function updateEnemies(deltaTime) {
             }
         }
     }
+}
+
+// Calculate the relative strength of an enemy compared to the player
+function calculateRelativeStrength(enemy) {
+    // Count nearby soldiers for player strength
+    const playerSoldiers = gameState.soldiers.filter(soldier => {
+        const dx = Math.abs(soldier.x - gameState.player.x);
+        const dy = Math.abs(soldier.y - gameState.player.y);
+        return dx <= 3 && dy <= 3; // Soldiers within 3 tiles of player
+    });
+    
+    // Count nearby enemies for enemy strength
+    const nearbyEnemies = gameState.enemies.filter(e => {
+        if (e.kingdomId !== enemy.kingdomId) return false;
+        
+        const dx = Math.abs(e.x - enemy.x);
+        const dy = Math.abs(e.y - enemy.y);
+        return dx <= 3 && dy <= 3; // Enemies within 3 tiles of this enemy
+    });
+    
+    // Calculate strengths (player health + # of soldiers vs. enemy health + # of allies)
+    const playerStrength = gameState.player.health + (playerSoldiers.length * 10);
+    const enemyStrength = enemy.health + (nearbyEnemies.length * 10);
+    
+    // Return ratio of enemy strength to player strength
+    return enemyStrength / playerStrength;
+}
+
+// Create a direct attack path for an enemy to reach the player
+function createEnemyAttackPath(enemy) {
+    // Create a path to the player's current location
+    const pathToPlayer = [];
+    let currentX = enemy.x;
+    let currentY = enemy.y;
+    
+    const playerX = gameState.player.x;
+    const playerY = gameState.player.y;
+    
+    // Simple direct path (could be improved with pathfinding)
+    while (currentX !== playerX || currentY !== playerY) {
+        if (currentX < playerX) currentX++;
+        else if (currentX > playerX) currentX--;
+        
+        if (currentY < playerY) currentY++;
+        else if (currentY > playerY) currentY--;
+        
+        pathToPlayer.push({x: currentX, y: currentY});
+        
+        // Limit path length
+        if (pathToPlayer.length > 30) break;
+    }
+    
+    enemy.attackPath = pathToPlayer;
+    enemy.attackPathIndex = 0;
 }
 
 // Enemy attacks player
@@ -2819,22 +3616,54 @@ function enemyAttackPlayer(enemy) {
     // Calculate final attack damage with some randomness
     const attackVariance = 0.3; // 30% variance
     const varianceFactor = 1 - attackVariance + (Math.random() * attackVariance * 2);
-    const finalAttack = Math.floor(baseAttack * timeFactor * varianceFactor);
+    const rawAttack = Math.floor(baseAttack * timeFactor * varianceFactor);
     
-    // Apply damage to player
-    gameState.player.health -= finalAttack;
+    // Get soldiers near player for defense bonus
+    const nearbyDefenders = gameState.soldiers.filter(soldier => {
+        const dx = Math.abs(soldier.x - gameState.player.x);
+        const dy = Math.abs(soldier.y - gameState.player.y);
+        return dx <= 1 && dy <= 1; // Soldiers in adjacent tiles help defend
+    });
+    
+    // Each soldier reduces damage by 5% (up to 70% reduction)
+    const maxDefenseReduction = 0.7; // 70% max reduction
+    const soldierDefenseReduction = Math.min(maxDefenseReduction, nearbyDefenders.length * 0.05);
+    
+    // Apply defense reduction
+    let finalAttack = Math.floor(rawAttack * (1 - soldierDefenseReduction));
+    
+    // Ensure minimum damage of 1
+    finalAttack = Math.max(1, finalAttack);
     
     // Critical hit chance (15% chance)
     let criticalHit = Math.random() < 0.15;
+    let criticalDamage = 0;
+    
     if (criticalHit) {
         // Additional damage on critical hit
-        const criticalDamage = Math.floor(finalAttack * 0.5);
-        gameState.player.health -= criticalDamage;
-        showMessage(`CRITICAL HIT! Enemy attacked you for ${finalAttack + criticalDamage} damage!`);
+        criticalDamage = Math.floor(finalAttack * 0.5);
+        finalAttack += criticalDamage;
+        showMessage(`CRITICAL HIT! Enemy attacked you for ${finalAttack} damage!`);
+        
+        if (nearbyDefenders.length > 0) {
+            showMessage(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`);
+        }
     } else {
         // Regular attack message
         showMessage(`Enemy attacked you for ${finalAttack} damage!`);
+        
+        if (nearbyDefenders.length > 0) {
+            showMessage(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`);
+        }
     }
+    
+    // Ensure player health is a number
+    if (isNaN(gameState.player.health)) {
+        gameState.player.health = 100;
+    }
+    
+    // Apply damage to player
+    gameState.player.health = Math.max(0, gameState.player.health - finalAttack);
     
     // Play attack sound
     const attackSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgA');
@@ -3368,78 +4197,30 @@ function attackEnemyBuilding(buildingX, buildingY) {
 
 // Have soldiers follow the player
 function updateSoldierPositions() {
-    // Max soldiers that can be at the same position as player
-    const maxSoldiersWithPlayer = 8;
-    
-    // Count soldiers already with player
-    const soldiersWithPlayer = gameState.soldiers.filter(soldier => 
-        soldier.x === gameState.player.x && soldier.y === gameState.player.y).length;
-    
-    // Only update positions for soldiers not already with the player
-    const soldiersToMove = gameState.soldiers.filter(soldier => 
-        soldier.x !== gameState.player.x || soldier.y !== gameState.player.y);
-    
-    // Calculate how many more soldiers can be with the player
-    const availableSpots = Math.max(0, maxSoldiersWithPlayer - soldiersWithPlayer);
-    
-    // Move up to that many soldiers to the player's position
-    for (let i = 0; i < Math.min(availableSpots, soldiersToMove.length); i++) {
-        const soldier = soldiersToMove[i];
-        soldier.x = gameState.player.x;
-        soldier.y = gameState.player.y;
-    }
-    
-    // For remaining soldiers, position them in adjacent tiles
-    for (let i = availableSpots; i < soldiersToMove.length; i++) {
-        const soldier = soldiersToMove[i];
-        
-        // Find an available adjacent tile
-        const adjacentPositions = [
-            {dx: 0, dy: -1}, // Up
-            {dx: 1, dy: 0},  // Right
-            {dx: 0, dy: 1},  // Down
-            {dx: -1, dy: 0}, // Left
-            {dx: 1, dy: -1}, // Up-Right
-            {dx: 1, dy: 1},  // Down-Right
-            {dx: -1, dy: 1}, // Down-Left
-            {dx: -1, dy: -1} // Up-Left
-        ];
-        
-        // Shuffle adjacent positions randomly
-        for (let j = adjacentPositions.length - 1; j > 0; j--) {
-            const k = Math.floor(Math.random() * (j + 1));
-            [adjacentPositions[j], adjacentPositions[k]] = [adjacentPositions[k], adjacentPositions[j]];
-        }
-        
-        // Try each adjacent position
-        let positioned = false;
-        for (const {dx, dy} of adjacentPositions) {
-            const newX = gameState.player.x + dx;
-            const newY = gameState.player.y + dy;
-            
-            // Check if position is valid
-            if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
-                // Check if the tile doesn't have a building
-                const tile = gameState.map[newY][newX];
-                if (!tile.building) {
-                    // Count soldiers already at this position
-                    const soldiersAtPos = gameState.soldiers.filter(s => 
-                        s.x === newX && s.y === newY).length;
-                    
-                    // Limit to 4 soldiers per adjacent tile
-                    if (soldiersAtPos < 4) {
-                        soldier.x = newX;
-                        soldier.y = newY;
-                        positioned = true;
-                        break;
-                    }
-                }
+    // Assign each soldier a unique adjacent tile around the player (no stacking)
+    const adjacentOffsets = [
+        {dx: 0, dy: -1}, // Up
+        {dx: 1, dy: 0},  // Right
+        {dx: 0, dy: 1},  // Down
+        {dx: -1, dy: 0}, // Left
+        {dx: 1, dy: -1}, // Up-Right
+        {dx: 1, dy: 1},  // Down-Right
+        {dx: -1, dy: 1}, // Down-Left
+        {dx: -1, dy: -1} // Up-Left
+    ];
+    for (let i = 0; i < gameState.soldiers.length; i++) {
+        const soldier = gameState.soldiers[i];
+        const offset = adjacentOffsets[i % adjacentOffsets.length];
+        const newX = gameState.player.x + offset.dx;
+        const newY = gameState.player.y + offset.dy;
+        if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
+            const tile = gameState.map[newY][newX];
+            // Only move if no building and no other soldier occupies
+            const occupied = gameState.soldiers.some(s => s !== soldier && s.x === newX && s.y === newY);
+            if (!tile.building && !occupied) {
+                soldier.x = newX;
+                soldier.y = newY;
             }
-        }
-        
-        // If no adjacent tile is available, just keep current position
-        if (!positioned) {
-            // Keep current position
         }
     }
 }
@@ -3900,7 +4681,7 @@ function drawTerritoryOverlay(screenX, screenY, territoryId, isCapital = false) 
     gameCtx.globalAlpha = 1.0;
 }
 
-// Update military stats based on buildings
+// Update military stats based on buildings and soldiers
 function updateMilitaryStats() {
     // Reset counters
     gameState.military.barracksCount = 0;
@@ -3915,19 +4696,33 @@ function updateMilitaryStats() {
         }
     }
     
-    // Calculate bonuses
+    // Calculate building bonuses
     gameState.military.attackBonus = gameState.military.barracksCount * 5; // Each barracks adds +5 attack
     gameState.military.defenseBonus = gameState.military.towerCount * 7;   // Each tower adds +7 defense
     
+    // Calculate soldier bonuses (each soldier adds +1 attack, +1 defense)
+    const soldierCount = gameState.soldiers.length;
+    const soldierAttackBonus = soldierCount * 1;
+    const soldierDefenseBonus = soldierCount * 1;
+    
     // Update total stats
-    gameState.military.attack = 10 + gameState.military.attackBonus; // Base attack + bonus
-    gameState.military.defense = 5 + gameState.military.defenseBonus; // Base defense + bonus
+    gameState.military.attack = 10 + gameState.military.attackBonus + soldierAttackBonus; // Base + building bonus + soldier bonus
+    gameState.military.defense = 5 + gameState.military.defenseBonus + soldierDefenseBonus; // Base + building bonus + soldier bonus
     
     // Training speed increases with barracks (10% per barracks)
     gameState.military.trainingSpeed = 1.0 + (gameState.military.barracksCount * 0.1);
     
     // Range increases with towers (1 base + 0.5 per tower, up to +2)
     gameState.military.range = 1 + Math.min(2, gameState.military.towerCount * 0.5);
+    
+    // Update player's health based on soldier count (base 100 + 10 per soldier)
+    gameState.player.maxHealth = 100 + (soldierCount * 10);
+    
+    // Ensure current health doesn't exceed max health
+    gameState.player.health = Math.min(gameState.player.health, gameState.player.maxHealth);
+    
+    // Update player's attack power based on military stats
+    gameState.player.attack = gameState.military.attack;
     
     // Update needs based on current age and buildings
     updateMilitaryNeeds();
@@ -4536,7 +5331,33 @@ function buildEnemyBuilding(kingdom) {
                 
                 // Only build within reasonable distance of capital
                 if (distanceToCapital < 20) {
-                    possibleLocations.push({x, y, distanceToCapital});
+                    // Important: Ensure this tile is adjacent to existing kingdom territory
+                    // to prevent "remote building"
+                    let isAdjacentToTerritory = false;
+                    
+                    // Check adjacent tiles
+                    for (let dy = -1; dy <= 1; dy++) {
+                        for (let dx = -1; dx <= 1; dx++) {
+                            if (dx === 0 && dy === 0) continue; // Skip self
+                            
+                            const nx = x + dx;
+                            const ny = y + dy;
+                            
+                            // Check bounds
+                            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                                // If adjacent tile is of same kingdom, this is a valid location
+                                if (gameState.map[ny][nx].territory === kingdom.id) {
+                                    isAdjacentToTerritory = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (isAdjacentToTerritory) break;
+                    }
+                    
+                    if (isAdjacentToTerritory) {
+                        possibleLocations.push({x, y, distanceToCapital});
+                    }
                 }
             }
         }
@@ -4565,21 +5386,30 @@ function buildEnemyBuilding(kingdom) {
         }
     }
     
+    // Count total kingdom enemies (soldiers)
+    const kingdomEnemies = gameState.enemies.filter(enemy => enemy.kingdomId === kingdom.id);
+    
     // Get time-based progression factor
     const gameTimeMinutes = gameState.gameTime / (60 * 1000);
     const isMidGame = gameTimeMinutes > 5; // Past 5 minutes
     const isLateGame = gameTimeMinutes > 15; // Past 15 minutes
     
-    // Military focus increases as game progresses 
-    const militaryFocus = 0.4 + (gameTimeMinutes / 30); // 40% chance at start, increasing over time
+    // Military focus increases as game progresses or if kingdom has few enemies
+    const baseMilitaryFocus = 0.4 + (gameTimeMinutes / 30); // 40% chance at start, increasing over time
+    
+    // Increase focus if kingdom has few enemies
+    const enemyCountBonus = kingdomEnemies.length < 3 ? 0.3 : 0;
+    
+    // Calculate final military focus probability
+    const militaryFocus = Math.min(0.9, baseMilitaryFocus + enemyCountBonus);
     
     let buildingType = null;
     
     // Prioritize military buildings if attack focus is high or being attacked
     if (Math.random() < militaryFocus || kingdom.beingAttacked) {
         // Military buildings
-        if (!buildingCounts['BARRACKS'] || buildingCounts['BARRACKS'] < 2) {
-            buildingType = 'BARRACKS';
+        if (!buildingCounts['BARRACKS'] || buildingCounts['BARRACKS'] < 2 + Math.floor(gameTimeMinutes / 5)) {
+            buildingType = 'BARRACKS'; // Build more barracks over time
         } else if (!buildingCounts['TOWER'] || buildingCounts['TOWER'] < 3) {
             buildingType = 'TOWER';
         } else {
@@ -4632,23 +5462,228 @@ function buildEnemyBuilding(kingdom) {
     });
     
     // Train military units if this is a barracks
-    if (buildingType === 'BARRACKS' && !kingdom.trainingInProgress) {
-        // Start training soldiers with a delay
-        setTimeout(() => {
-            kingdom.soldiers = kingdom.soldiers || [];
-            kingdom.soldiers.push({
-                x: x,
-                y: y,
-                attack: 5,
-                kingdomId: kingdom.id
-            });
-            
-            // Notify if visible to player
-            if (distanceToPlayer < 20) {
-                showMessage(`Kingdom ${kingdom.id} has trained new soldiers!`);
-            }
-        }, 10000); // 10 seconds to train a soldier
+    if (buildingType === 'BARRACKS') {
+        // Start training soldiers immediately
+        startEnemySoldierTraining(kingdom, x, y);
     }
+    
+    // Each house increases kingdom's enemy capacity
+    if (buildingType === 'HOUSE') {
+        // Add a new enemy near the house if kingdom has capacity
+        const houseEnemyChance = 0.6; // 60% chance to add enemy per house
+        
+        // Calculate kingdom's current soldier count
+        const kingdomSoldierCount = gameState.enemies.filter(e => 
+            e.kingdomId === kingdom.id && (e.type === 'WARRIOR' || e.type === 'ARCHER')
+        ).length;
+        
+        // Calculate soldier limit (5 base + 2 per house)
+        const kingdomHouseCount = buildingCounts['HOUSE'] || 0;
+        const kingdomSoldierLimit = 5 + (kingdomHouseCount * 2);
+        
+        // Only spawn if under the limit
+        if (kingdomSoldierCount < kingdomSoldierLimit && Math.random() < houseEnemyChance) {
+            // Choose a random enemy type
+            const enemyType = Math.random() < 0.7 ? 'WARRIOR' : 'ARCHER';
+            const enemyInfo = ENEMY_TYPES[enemyType];
+            
+            // Find a valid position near the house
+            let validPosFound = false;
+            let spawnX = x;
+            let spawnY = y;
+            
+            // Try to find a valid position in a 3x3 area around the house
+            for (let dy = -1; dy <= 1 && !validPosFound; dy++) {
+                for (let dx = -1; dx <= 1 && !validPosFound; dx++) {
+                    if (dx === 0 && dy === 0) continue; // Skip the house tile
+                    
+                    const newX = x + dx;
+                    const newY = y + dy;
+                    
+                    // Check bounds and if tile is empty
+                    if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
+                        const tile = gameState.map[newY][newX];
+                        if (!tile.building && tile.territory === kingdom.id) {
+                            spawnX = newX;
+                            spawnY = newY;
+                            validPosFound = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Add a new enemy if we found a valid position
+            if (validPosFound) {
+                const newEnemy = {
+                    x: spawnX,
+                    y: spawnY,
+                    type: enemyType,
+                    health: enemyInfo.health,
+                    attack: enemyInfo.attack,
+                    lastMoved: 0,
+                    moveDelay: 1000 / enemyInfo.speed,
+                    kingdomId: kingdom.id,
+                    isAggressive: Math.random() < 0.3 // 30% chance to be aggressive from start
+                };
+                
+                gameState.enemies.push(newEnemy);
+                
+                if (distanceToPlayer < 20) {
+                    showMessage(`Kingdom ${kingdom.id} has recruited a new ${enemyType}!`);
+                }
+            }
+        }
+    }
+}
+
+// Start training soldiers at enemy barracks
+function startEnemySoldierTraining(kingdom, barrackX, barrackY) {
+    // Calculate kingdom's soldier limit based on houses
+    const kingdomHouseCount = gameState.enemyBuildings.filter(b => 
+        b.kingdomId === kingdom.id && b.type === 'HOUSE'
+    ).length;
+    
+    // Calculate current soldier count for this kingdom
+    const kingdomSoldierCount = gameState.enemies.filter(e => 
+        e.kingdomId === kingdom.id && (e.type === 'WARRIOR' || e.type === 'ARCHER')
+    ).length;
+    
+    // Base limit is 5 soldiers + 2 per house
+    const kingdomSoldierLimit = 5 + (kingdomHouseCount * 2);
+    
+    // Don't train more soldiers if at or over the limit
+    if (kingdomSoldierCount >= kingdomSoldierLimit) {
+        // Try again later if kingdom is under attack (emergency training)
+        if (kingdom.beingAttacked) {
+            setTimeout(() => {
+                startEnemySoldierTraining(kingdom, barrackX, barrackY);
+            }, 30000); // Try again in 30 seconds if under attack
+        }
+        return;
+    }
+    
+    // Set training delay based on game time (faster training as game progresses)
+    const gameTimeMinutes = gameState.gameTime / (60 * 1000);
+    const trainingTime = Math.max(8000, 15000 - (gameTimeMinutes * 300)); // 15s at start, down to 8s in late game
+    
+    // Set flag to track training in progress
+    if (!kingdom.trainingInProgress) {
+        kingdom.trainingInProgress = {};
+    }
+    
+    const barracksId = `${barrackX},${barrackY}`;
+    kingdom.trainingInProgress[barracksId] = true;
+    
+    // Train a soldier after the delay
+    setTimeout(() => {
+        // Check if barracks still exists
+        const barracks = gameState.enemyBuildings.find(
+            b => b.x === barrackX && b.y === barrackY && b.type === 'BARRACKS'
+        );
+        
+        if (barracks) {
+            // Recheck soldier count to ensure we're not over the limit
+            const currentSoldierCount = gameState.enemies.filter(e => 
+                e.kingdomId === kingdom.id && (e.type === 'WARRIOR' || e.type === 'ARCHER')
+            ).length;
+            
+            if (currentSoldierCount >= kingdomSoldierLimit) {
+                // Cancel training if over limit
+                delete kingdom.trainingInProgress[barracksId];
+                
+                // Try again later
+                setTimeout(() => {
+                    startEnemySoldierTraining(kingdom, barrackX, barrackY);
+                }, 20000); // Check again in 20 seconds
+                return;
+            }
+            
+            // Choose soldier type (archer or warrior)
+            const soldierType = Math.random() < 0.3 ? 'ARCHER' : 'WARRIOR';
+            const enemyInfo = ENEMY_TYPES[soldierType];
+            
+            // Find a valid position near the barracks
+            let spawnX = barrackX;
+            let spawnY = barrackY;
+            let validPosFound = false;
+            
+            // Search 5x5 area around barracks
+            for (let dy = -2; dy <= 2 && !validPosFound; dy++) {
+                for (let dx = -2; dx <= 2 && !validPosFound; dx++) {
+                    if (dx === 0 && dy === 0) continue; // Skip the barracks tile
+                    
+                    const newX = barrackX + dx;
+                    const newY = barrackY + dy;
+                    
+                    // Check if tile is valid for spawning
+                    if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
+                        const tile = gameState.map[newY][newX];
+                        if (!tile.building && tile.territory === kingdom.id) {
+                            spawnX = newX;
+                            spawnY = newY;
+                            validPosFound = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (validPosFound) {
+                // Create a new enemy soldier
+                const newSoldier = {
+                    x: spawnX,
+                    y: spawnY,
+                    type: soldierType,
+                    health: enemyInfo.health,
+                    attack: enemyInfo.attack,
+                    lastMoved: 0,
+                    moveDelay: 1000 / enemyInfo.speed,
+                    kingdomId: kingdom.id,
+                    isAggressive: true, // Soldiers are always aggressive
+                    isTargetingPlayer: Math.random() < 0.5 // 50% chance to directly target player
+                };
+                
+                gameState.enemies.push(newSoldier);
+                
+                // Notify if close to player
+                const distanceToPlayer = Math.sqrt(
+                    Math.pow(spawnX - gameState.player.x, 2) + 
+                    Math.pow(spawnY - gameState.player.y, 2)
+                );
+                
+                if (distanceToPlayer < 20) {
+                    showMessage(`Kingdom ${kingdom.id} has trained a new ${soldierType}!`);
+                }
+                
+                // Queue next soldier training with delay based on how close to limit
+                delete kingdom.trainingInProgress[barracksId];
+                
+                // Calculate remaining capacity
+                const remainingCapacity = kingdomSoldierLimit - (currentSoldierCount + 1);
+                
+                // Delay time increases as kingdom approaches its unit cap
+                const nextTrainingDelay = remainingCapacity <= 1 ? 30000 : // Nearly at limit - 30s
+                                         remainingCapacity <= 3 ? 20000 : // Getting close - 20s 
+                                         10000; // Normal training - 10s
+                
+                // Schedule next training
+                setTimeout(() => {
+                    startEnemySoldierTraining(kingdom, barrackX, barrackY);
+                }, nextTrainingDelay);
+            } else {
+                // No space to spawn, try again later
+                delete kingdom.trainingInProgress[barracksId];
+                
+                setTimeout(() => {
+                    startEnemySoldierTraining(kingdom, barrackX, barrackY);
+                }, 5000);
+            }
+        } else {
+            // Barracks was destroyed, remove training flag
+            delete kingdom.trainingInProgress[barracksId];
+        }
+    }, trainingTime);
 }
 
 // Start the game when page loads
