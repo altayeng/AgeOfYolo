@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Age of Empires Style Game</title>
+    <title>Age of Empires: Imperial Dawn</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <div id="game-container">
@@ -13,62 +14,83 @@
             <div class="game-time" id="game-time">Year: 0</div>
             <div class="military-info" id="military-info">
                 <div class="military-stat">
-                    <span class="military-icon">⚔️</span>
+                    <span class="military-icon"><i class="fas fa-sword"></i></span>
                     <span class="military-value" id="attack-value">10</span>
                 </div>
                 <div class="military-stat">
-                    <span class="military-icon">🛡️</span>
+                    <span class="military-icon"><i class="fas fa-shield-alt"></i></span>
                     <span class="military-value" id="defense-value">5</span>
                 </div>
                 <div id="military-needs"></div>
             </div>
         </div>
+        
         <canvas id="game-canvas"></canvas>
+        
         <div id="minimap-container">
             <canvas id="minimap"></canvas>
-            <div id="minimap-label">Mini Map</div>
+            <div id="minimap-label">MINI MAP</div>
         </div>
-        <div id="debug-info"></div>
+        
         <div id="ui-container">
             <div id="resources">
                 <div class="resource">
-                    <span class="resource-icon">🌲</span>
+                    <span class="resource-icon"><i class="fas fa-tree"></i></span>
                     <span class="resource-count" id="wood-count">0</span>
                 </div>
                 <div class="resource">
-                    <span class="resource-icon">🪨</span>
+                    <span class="resource-icon"><i class="fas fa-mountain"></i></span>
                     <span class="resource-count" id="stone-count">0</span>
                 </div>
                 <div class="resource">
-                    <span class="resource-icon">🥩</span>
+                    <span class="resource-icon"><i class="fas fa-drumstick-bite"></i></span>
                     <span class="resource-count" id="food-count">0</span>
                 </div>
                 <div class="resource">
-                    <span class="resource-icon">👤</span>
+                    <span class="resource-icon"><i class="fas fa-users"></i></span>
                     <span class="resource-count" id="population-count">0/10</span>
                 </div>
             </div>
+            
             <div id="actions">
                 <div class="action-group">
                     <div class="group-title">Buildings</div>
                     <div class="buttons-row">
-                        <button id="build-house" class="building-button" data-mobile-text="House">House</button>
-                        <button id="build-barracks" class="building-button" data-mobile-text="Barr">Barracks</button>
-                        <button id="build-mill" class="building-button" data-mobile-text="Mill">Mill</button>
-                        <button id="build-tower" class="building-button" data-mobile-text="Tower">Tower</button>
+                        <button id="build-house" class="building-button">
+                            House
+                        </button>
+                        <button id="build-barracks" class="building-button">
+                            Barracks
+                        </button>
+                        <button id="build-mill" class="building-button">
+                            Mill
+                        </button>
+                        <button id="build-tower" class="building-button">
+                            Tower
+                        </button>
                     </div>
                 </div>
+                
                 <div class="action-group">
                     <div class="group-title">Actions</div>
                     <div class="buttons-row">
-                        <button id="gather" class="action-button" data-mobile-text="Get">Gather</button>
-                        <button id="craft-tool" class="action-button" data-mobile-text="Tool">Craft Tool</button>
-                        <button id="advance-age" class="action-button" data-mobile-text="Age">Advance Age</button>
+                        <button id="gather" class="action-button">
+                            Gather
+                        </button>
+                        <button id="craft-tool" class="action-button">
+                            Craft Tool
+                        </button>
+                        <button id="advance-age" class="action-button">
+                            Advance Age
+                        </button>
                     </div>
                 </div>
             </div>
         </div>
+        
+        <div id="game-message"></div>
     </div>
+    
     <script src="game.js"></script>
 </body>
 </html>
