@@ -369,6 +369,18 @@ button:active {
     .buttons-row {
         gap: 5px;
     }
+
+    .military-info {
+        gap: 5px;
+    }
+    
+    .military-icon {
+        font-size: 14px;
+    }
+    
+    .military-value {
+        font-size: 12px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -513,4 +525,48 @@ button:active {
         visibility: visible;
         opacity: 1;
     }
+}
+
+.military-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #f0d090;
+}
+
+.military-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.military-icon {
+    font-size: 16px;
+}
+
+.military-value {
+    font-family: 'Times New Roman', serif;
+    font-size: 14px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+#military-needs {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.military-need {
+    background-color: rgba(255, 0, 0, 0.2);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    color: #FF9800;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
 }
