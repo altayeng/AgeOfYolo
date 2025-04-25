@@ -230,6 +230,49 @@ function initGame() {
     // Initialize kingdoms
     initializeKingdoms();
     
+    // Initialize game state if it doesn't exist
+    if (!gameState) {
+        gameState = {
+            map: [],
+            player: {
+                x: Math.floor(MAP_SIZE / 2),
+                y: Math.floor(MAP_SIZE / 2),
+                health: 100,
+                attack: 10
+            },
+            resources: {
+                wood: 0,
+                stone: 0,
+                food: 0
+            },
+            buildings: [],
+            enemyBuildings: [],
+            soldiers: [],
+            soldierTraining: [],
+            camera: {
+                x: 0,
+                y: 0
+            },
+            enemies: [],
+            selectedTile: null,
+            lastTick: Date.now(),
+            gameYear: 0,
+            currentAge: 0,
+            buildingAnimations: [],
+            debugClicks: [],
+            population: {
+                current: 1,
+                max: 10,
+                soldiers: 0
+            },
+            kingdoms: [],
+            combatCooldown: 0 // Add combat cooldown property
+        };
+    } else {
+        // Just add combatCooldown if the gameState already exists
+        gameState.combatCooldown = 0;
+    }
+    
     // Start with some initial resources
     gameState.resources.wood = 100;
     gameState.resources.stone = 80;
@@ -255,6 +298,7 @@ function initGame() {
     
     // Initialize military stats
     updateMilitaryStats();
+    updateMilitaryUI();
     
     // Show welcome message
     setTimeout(() => {
@@ -427,7 +471,7 @@ function generateMap() {
 
 // Initialize kingdoms across the map
 function initializeKingdoms() {
-    // Clear existing kingdoms
+    // Initialize kingdoms array
     gameState.kingdoms = [];
     gameState.enemies = [];
     gameState.enemyBuildings = [];
@@ -468,51 +512,95 @@ function initializeKingdoms() {
         }
     }
     
+    // Generate initial walls for the player kingdom
+    generateInitialWalls(playerKingdom);
+    
     // Create AI kingdoms (up to MAX_KINGDOMS - 1)
     const maxAIKingdoms = MAX_KINGDOMS - 1;
+    
+    // Define minimum distances - increased for better kingdom separation
+    const MIN_DISTANCE_TO_PLAYER = 40; // Minimum distance from player
+    const MIN_DISTANCE_BETWEEN_KINGDOMS = 50; // Minimum distance between AI kingdoms
+    
+    // Calculate positions in a distributed way around the map
+    const mapCenter = Math.floor(MAP_SIZE / 2);
     
     for (let i = 0; i < maxAIKingdoms; i++) {
         // Find a suitable location away from player and other kingdoms
         let kingdomX, kingdomY;
         let validLocation = false;
         let attempts = 0;
+        const MAX_ATTEMPTS = 150; // Increased attempt limit for better placement
         
         do {
-            // Place kingdoms at increasing distances from center
-            const angle = (i * (2 * Math.PI / maxAIKingdoms)) + (Math.random() * 0.5);
-            const distance = 15 + Math.random() * 10;
+            // First try to place kingdoms evenly distributed around the map
+            if (attempts < 50) {
+                // Use an angle-based distribution for initial attempts
+                const angle = (2 * Math.PI * i / maxAIKingdoms) + (Math.random() * 0.5);
+                const distance = Math.floor(MIN_DISTANCE_TO_PLAYER * 1.2 + Math.random() * 10);
+                
+                kingdomX = Math.max(15, Math.min(MAP_SIZE - 15, 
+                    mapCenter + Math.floor(distance * Math.cos(angle))));
+                kingdomY = Math.max(15, Math.min(MAP_SIZE - 15, 
+                    mapCenter + Math.floor(distance * Math.sin(angle))));
+            } else {
+                // Fall back to random placement after initial attempts
+                kingdomX = 15 + Math.floor(Math.random() * (MAP_SIZE - 30));
+                kingdomY = 15 + Math.floor(Math.random() * (MAP_SIZE - 30));
+            }
             
-            kingdomX = Math.floor(MAP_SIZE / 2 + distance * Math.cos(angle));
-            kingdomY = Math.floor(MAP_SIZE / 2 + distance * Math.sin(angle));
+            // Calculate distance to player
+            const distToPlayer = Math.sqrt(
+                Math.pow(kingdomX - gameState.player.x, 2) + 
+                Math.pow(kingdomY - gameState.player.y, 2)
+            );
             
-            // Ensure within map bounds
-            kingdomX = Math.max(5, Math.min(MAP_SIZE - 5, kingdomX));
-            kingdomY = Math.max(5, Math.min(MAP_SIZE - 5, kingdomY));
+            // Check if far enough from player
+            if (distToPlayer < MIN_DISTANCE_TO_PLAYER) {
+                attempts++;
+                continue;
+            }
             
-            // Check if far enough from other kingdoms
-            validLocation = true;
-            for (const kingdom of gameState.kingdoms) {
+            // Check distance to other kingdoms
+            let tooClose = false;
+            for (let j = 1; j < gameState.kingdoms.length; j++) {
+                const otherKingdom = gameState.kingdoms[j];
                 const distToKingdom = Math.sqrt(
-                    Math.pow(kingdomX - kingdom.capitalX, 2) + 
-                    Math.pow(kingdomY - kingdom.capitalY, 2)
+                    Math.pow(kingdomX - otherKingdom.capitalX, 2) + 
+                    Math.pow(kingdomY - otherKingdom.capitalY, 2)
                 );
                 
-                if (distToKingdom < 15) {
-                    validLocation = false;
+                if (distToKingdom < MIN_DISTANCE_BETWEEN_KINGDOMS) {
+                    tooClose = true;
                     break;
                 }
             }
             
-            attempts++;
-        } while (!validLocation && attempts < 50);
-        
-        if (!validLocation) {
-            console.log("Could not place kingdom, skipping");
-            continue;
-        }
+            if (tooClose) {
+                attempts++;
+                continue;
+            }
+            
+            // Check if the area is suitable (no major obstacles, etc.)
+            // For now, we'll just consider it valid if there's no building
+            const tile = gameState.map[kingdomY][kingdomX];
+            if (tile.building) {
+                attempts++;
+                continue;
+            }
+            
+            validLocation = true;
+            
+            // If we've tried too many times, just use the current location
+            if (attempts >= MAX_ATTEMPTS) {
+                console.log("Max attempts reached when placing kingdom " + (i+1));
+                validLocation = true;
+            }
+            
+        } while (!validLocation);
         
         // Create the kingdom
-        const kingdomId = i + 1;
+        const kingdomId = gameState.kingdoms.length;
         const kingdom = {
             id: kingdomId,
             name: `Kingdom ${kingdomId}`,
@@ -591,56 +679,63 @@ function initializeKingdoms() {
 // Generate initial walls around a kingdom
 function generateInitialWalls(kingdom) {
     const wallSize = 8; // 8x8 territory size
-    const centerX = kingdom.capitalX;
-    const centerY = kingdom.capitalY;
     
     // Clear any existing walls
     kingdom.wallPerimeter = [];
     
-    // Calculate territory bounds
-    const startX = centerX - Math.floor(wallSize / 2);
-    const startY = centerY - Math.floor(wallSize / 2);
-    const endX = startX + wallSize;
-    const endY = startY + wallSize;
+    // First, clear all resources from potential wall locations and interior
+    for (let y = kingdom.capitalY - wallSize / 2; y <= kingdom.capitalY + wallSize / 2; y++) {
+        for (let x = kingdom.capitalX - wallSize / 2; x <= kingdom.capitalX + wallSize / 2; x++) {
+            // Make sure coordinates are within map bounds
+            if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+                // Force clear any resources in the entire kingdom area
+                gameState.map[y][x].resource = null;
+            }
+        }
+    }
     
-    // Generate walls around the perimeter
-    for (let x = startX; x < endX; x++) {
-        for (let y = startY; y < endY; y++) {
-            // Only place walls on the perimeter
-            if (x === startX || x === endX - 1 || y === startY || y === endY - 1) {
-                // Ensure within map bounds
+    // Now build the walls
+    for (let y = kingdom.capitalY - wallSize / 2; y <= kingdom.capitalY + wallSize / 2; y++) {
+        for (let x = kingdom.capitalX - wallSize / 2; x <= kingdom.capitalX + wallSize / 2; x++) {
+            // Check if this is the perimeter
+            const isPerimeter = 
+                x === kingdom.capitalX - wallSize / 2 ||
+                x === kingdom.capitalX + wallSize / 2 ||
+                y === kingdom.capitalY - wallSize / 2 ||
+                y === kingdom.capitalY + wallSize / 2;
+            
+            if (isPerimeter) {
+                // Make sure coordinates are within map bounds
                 if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
                     const tile = gameState.map[y][x];
                     
-                    // Place a wall if there's no building or resource
-                    if (!tile.building && !tile.resource) {
-                        tile.building = 'WALL';
-                        tile.isWall = true;
-                        tile.territory = kingdom.id;
-                        
-                        // Add to wall perimeter for tracking
-                        kingdom.wallPerimeter.push({x: x, y: y});
-                        
-                        // If this is an enemy kingdom, add to enemy buildings
-                        if (kingdom.id !== 0) {
-                            gameState.enemyBuildings.push({
-                                type: 'WALL',
-                                x: x,
-                                y: y,
-                                owner: 'enemy',
-                                kingdomId: kingdom.id,
-                                health: BUILDING_TYPES['WALL'].maxHealth
-                            });
-                        } else {
-                            // Player's wall
-                            gameState.buildings.push({
-                                type: 'WALL',
-                                x: x,
-                                y: y,
-                                health: BUILDING_TYPES['WALL'].maxHealth,
-                                id: Date.now() + Math.floor(Math.random() * 1000)
-                            });
-                        }
+                    // Place wall on this tile
+                    tile.building = 'WALL';
+                    tile.isWall = true;
+                    tile.territory = kingdom.id;
+                    
+                    // Add to wall perimeter for tracking
+                    kingdom.wallPerimeter.push({x: x, y: y});
+                    
+                    // If this is an enemy kingdom, add to enemy buildings
+                    if (kingdom.id !== 0) {
+                        gameState.enemyBuildings.push({
+                            type: 'WALL',
+                            x: x,
+                            y: y,
+                            owner: 'enemy',
+                            kingdomId: kingdom.id,
+                            health: BUILDING_TYPES['WALL'].maxHealth
+                        });
+                    } else {
+                        // Player's wall
+                        gameState.buildings.push({
+                            type: 'WALL',
+                            x: x,
+                            y: y,
+                            health: BUILDING_TYPES['WALL'].maxHealth,
+                            id: Date.now() + Math.floor(Math.random() * 1000)
+                        });
                     }
                 }
             } else {
@@ -1616,23 +1711,98 @@ function handleCanvasClick(event) {
     const mouseX = event.clientX - rect.left;
     const mouseY = event.clientY - rect.top;
     
+    // Convert screen coordinates to isometric coordinates
     const clickedTile = screenToIso(mouseX, mouseY);
     
-    // Add visual debug marker
+    // Add debug click for development
     addDebugClick(mouseX, mouseY, clickedTile.x, clickedTile.y);
     
-    // Check if clicked on enemy building
-    const clickedEnemyBuilding = gameState.enemyBuildings.find(b => 
-        b.x === clickedTile.x && b.y === clickedTile.y);
-    
-    if (clickedEnemyBuilding) {
-        // Attack the enemy building
-        attackEnemyBuilding(clickedTile.x, clickedTile.y);
+    if (clickedTile.x < 0 || clickedTile.x >= MAP_SIZE || 
+        clickedTile.y < 0 || clickedTile.y >= MAP_SIZE) {
         return;
     }
     
-    // Process the click for movement
+    // Store selected tile
+    gameState.selectedTile = clickedTile;
+    
+    // Get the clicked map tile
+    const tile = gameState.map[clickedTile.y][clickedTile.x];
+    
+    // Check if clicked on own wall with shift key
+    const clickedWall = gameState.buildings.find(b => 
+        b.x === clickedTile.x && b.y === clickedTile.y && b.type === 'WALL');
+        
+    if (clickedWall && tile.territory === 0 && event.shiftKey) {
+            // Destroy the wall if shift key is pressed
+            destroyPlayerWall(clickedWall, clickedTile.x, clickedTile.y);
+            return;
+    }
+    
+    // If tile has a building and it's an enemy building, try to attack it
+    if (tile.building && tile.territory !== 0) {
+        if (tile.isWall) {
+            // Check if player is adjacent to the wall
+            const dx = Math.abs(gameState.player.x - clickedTile.x);
+            const dy = Math.abs(gameState.player.y - clickedTile.y);
+            
+            if (dx <= 1 && dy <= 1) {
+                // Player is adjacent to the wall, can attack
+        attackEnemyBuilding(clickedTile.x, clickedTile.y);
+        return;
+            } else {
+                showMessage("You need to be adjacent to a wall to attack it!");
+                return;
+            }
+        } else {
+            // For other buildings, check if player is within reasonable range
+            const distance = Math.sqrt(
+                Math.pow(gameState.player.x - clickedTile.x, 2) + 
+                Math.pow(gameState.player.y - clickedTile.y, 2)
+            );
+            
+            if (distance <= 3) { // Allow attacking from 3 tiles away
+                attackEnemyBuilding(clickedTile.x, clickedTile.y);
+                return;
+            } else {
+                showMessage("Move closer to attack this building!");
+                return;
+            }
+        }
+    }
+    
+    // Process the click for movement using existing handleCanvasTouch for mobile compatibility
     handleCanvasTouch(mouseX, mouseY);
+}
+
+// Destroy player's wall when clicked with Shift key
+function destroyPlayerWall(wall, x, y) {
+    // Remove the wall from buildings array
+    const wallIndex = gameState.buildings.indexOf(wall);
+    if (wallIndex !== -1) {
+        gameState.buildings.splice(wallIndex, 1);
+    }
+    
+    // Clear the wall from the map
+    const tile = gameState.map[y][x];
+    tile.building = null;
+    tile.isWall = false;
+    
+    // Remove from kingdom wall perimeter
+    const playerKingdom = gameState.kingdoms[0];
+    const perimeterIndex = playerKingdom.wallPerimeter.findIndex(w => w.x === x && w.y === y);
+    if (perimeterIndex !== -1) {
+        playerKingdom.wallPerimeter.splice(perimeterIndex, 1);
+    }
+    
+    // Give back some resources (half the cost)
+    gameState.resources.wood += Math.floor(BUILDING_TYPES.WALL.woodCost / 2);
+    gameState.resources.stone += Math.floor(BUILDING_TYPES.WALL.stoneCost / 2);
+    
+    // Show message
+    showMessage(`Wall at (${x}, ${y}) destroyed. Recovered some resources.`);
+    
+    // Update UI
+    updateUI();
 }
 
 // Handle minimap click - improved to accurately position the camera
@@ -1675,97 +1845,162 @@ function gatherResource(tile) {
     updateUI();
 }
 
-// Build a structure on the selected tile
+// Build a structure
 function buildStructure(buildingType, callback) {
     if (!gameState.selectedTile) {
-        showMessage('Önce inşa edilecek bir alan seçin!');
+        showMessage('First select a tile where you want to build!');
         return;
     }
     
     const tile = gameState.map[gameState.selectedTile.y][gameState.selectedTile.x];
     const building = BUILDING_TYPES[buildingType];
     
-    // Seçilen alanın uygunluğunu kontrol et
-    if (tile.resource || tile.building) {
-        showMessage('Bu alana inşa edilemez - alan dolu!');
+    // Check if there's already a building or resource
+    if (tile.building || tile.resource) {
+        showMessage('Cannot build here - the area is occupied!');
         return;
     }
     
-    // Oyuncuya yakınlık kontrolü (3 kare mesafede)
+    // Check if tile is part of player's territory
+    if (tile.territory !== 0) {
+        showMessage('You can only build within your territory!');
+        return;
+    }
+    
+    // NEW: Check if the tile is inside a walled enclosure
+    // We'll use a flood fill to see if we can reach the edge of the map
+    const isEnclosed = !canReachMapEdge(gameState.selectedTile.x, gameState.selectedTile.y, 0);
+    if (!isEnclosed) {
+        showMessage('You can only build within your walled territory!');
+        return;
+    }
+    
+    // Check proximity to player
     const dx = Math.abs(gameState.selectedTile.x - gameState.player.x);
     const dy = Math.abs(gameState.selectedTile.y - gameState.player.y);
     if (dx > 3 || dy > 3) {
-        showMessage('İnşa etmek için daha yakında olmalısınız!');
+        showMessage('You must be closer to build here!');
         return;
     }
     
-    // Kaynak yeterliliği kontrolü
+    // Check if player has enough resources
     const canAfford = gameState.resources.wood >= building.woodCost && 
                      gameState.resources.stone >= building.stoneCost &&
                      gameState.resources.food >= building.foodCost;
     
     if (canAfford) {
-        // İnşa animasyonu başlat
-        const buildingAnimation = {
-            progress: 0,
-            x: gameState.selectedTile.x,
-            y: gameState.selectedTile.y,
-            type: buildingType
-        };
+        // Play build sound
+        const buildSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgA');
+        buildSound.volume = 0.3;
+        buildSound.play().catch(() => {});
         
-        // Kaynakları düş
+        // Deduct resources
         gameState.resources.wood -= building.woodCost;
         gameState.resources.stone -= building.stoneCost;
         gameState.resources.food -= building.foodCost;
         
-        // Create new building object with unique ID
+        // Place building
+        tile.building = buildingType;
+        
+        // Add to buildings list
         const newBuilding = {
             type: buildingType,
             x: gameState.selectedTile.x,
             y: gameState.selectedTile.y,
-            health: 100, // Bina sağlığı eklendi
-            id: Date.now() + Math.floor(Math.random() * 1000) // Unique ID
+            health: building.maxHealth,
+            id: Date.now() + Math.floor(Math.random() * 1000)
         };
         
-        // Binayı ekle
-        tile.building = buildingType;
+        // Special properties for buildings
+        if (buildingType === 'BARRACKS') {
+            newBuilding.training = false;
+            newBuilding.progress = 0;
+        }
+        
+        // Add building
         gameState.buildings.push(newBuilding);
         
-        // Nüfus kapasitesini güncelle
-        if (building.population > 0) {
-            gameState.population.max += building.population;
-            showMessage(`Ev inşa edildi! Nüfus limiti ${gameState.population.max} oldu.`);
-        } else {
-            showMessage(`${building.name} başarıyla inşa edildi!`);
+        // If it's a house, increase population cap
+        if (buildingType === 'HOUSE') {
+            gameState.populationCap += 5;
         }
         
-        // If it's a house, start soldier training
-        if (buildingType === 'HOUSE' && callback) {
-            callback(newBuilding);
-        }
+        // Show success message
+        showMessage(`${buildingType} built successfully!`);
         
-        // Arayüzü güncelle
+        // Update UI
         updateUI();
         
-        // İnşa sesini çal
-        const buildSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgA');
-        buildSound.volume = 0.3;
-        buildSound.play().catch(() => {}); // Ses hatalarını görmezden gel
+        // Update military stats for new buildings
+        updateMilitaryStats();
+        
+        // Call the callback if provided (for specific building effects)
+        if (callback) callback(newBuilding);
     } else {
-        // Eksik kaynakları hesapla ve göster
+        // Calculate what resources are missing
         const missingResources = [];
         if (gameState.resources.wood < building.woodCost) {
-            missingResources.push(`${building.woodCost - Math.floor(gameState.resources.wood)} odun`);
+            missingResources.push(`${building.woodCost - Math.floor(gameState.resources.wood)} wood`);
         }
         if (gameState.resources.stone < building.stoneCost) {
-            missingResources.push(`${building.stoneCost - Math.floor(gameState.resources.stone)} taş`);
+            missingResources.push(`${building.stoneCost - Math.floor(gameState.resources.stone)} stone`);
         }
         if (gameState.resources.food < building.foodCost) {
-            missingResources.push(`${building.foodCost - Math.floor(gameState.resources.food)} yemek`);
+            missingResources.push(`${building.foodCost - Math.floor(gameState.resources.food)} food`);
         }
         
-        showMessage(`Yetersiz kaynak! Gereken: ${missingResources.join(', ')}.`);
+        showMessage(`Not enough resources to build ${buildingType}! Need: ${missingResources.join(', ')}.`);
     }
+}
+
+// Check if a position can reach the edge of the map (not enclosed by walls)
+function canReachMapEdge(startX, startY, kingdomId) {
+    const kingdom = gameState.kingdoms[kingdomId];
+    
+    // Get wall coordinates for the kingdom
+    const wallCoords = new Set();
+    for (const wall of kingdom.wallPerimeter) {
+        wallCoords.add(`${wall.x},${wall.y}`);
+    }
+    
+    // Create a visited set
+    const visited = new Set([`${startX},${startY}`]);
+    const queue = [{x: startX, y: startY}];
+    
+    // Directions for flood fill
+    const directions = [
+        {dx: 1, dy: 0},
+        {dx: -1, dy: 0},
+        {dx: 0, dy: 1},
+        {dx: 0, dy: -1}
+    ];
+    
+    // Flood fill from the starting position
+    while (queue.length > 0) {
+        const {x, y} = queue.shift();
+        
+        // Check if reached the edge of the map
+        if (x === 0 || x === MAP_SIZE - 1 || y === 0 || y === MAP_SIZE - 1) {
+            return true;
+        }
+        
+        for (const {dx, dy} of directions) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const coordKey = `${nx},${ny}`;
+            
+            // If in bounds, not visited, and not a wall
+            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE && 
+                !visited.has(coordKey) && !wallCoords.has(coordKey)) {
+                
+                visited.add(coordKey);
+                queue.push({x: nx, y: ny});
+            }
+        }
+    }
+    
+    // If we exhausted the queue and never reached the edge, the position is enclosed
+    return false;
 }
 
 // Show a message to the player
@@ -1978,7 +2213,7 @@ function showDirectionIndicator(dx, dy) {
     }
 }
 
-// Move player in the specified direction
+// Move player in a specific direction
 function movePlayer(dx, dy) {
     // İzometrik harita için yön düzeltmesi
     let actualDx = dx;
@@ -1994,11 +2229,37 @@ function movePlayer(dx, dy) {
         }
     }
     
+    // Calculate new position
     const newX = gameState.player.x + actualDx;
     const newY = gameState.player.y + actualDy;
     
-    // Check if the new position is within map bounds
+    // Check if new position is within map bounds
     if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
+        const targetTile = gameState.map[newY][newX];
+        
+        // Check for collisions with buildings or enemy walls
+        if (targetTile.building) {
+            // Check if it's a wall
+            if (targetTile.isWall) {
+                // If it's an enemy wall, don't allow movement but enable attack
+                if (targetTile.territory !== 0) {
+                    // Show message to attack the wall
+                    showMessage("Enemy wall detected! Click to attack.");
+                    
+                    // Direction indicator
+                    showDirectionIndicator(actualDx, actualDy);
+                    
+                    // Don't move the player
+                    return;
+                }
+                // Player walls can still be passed through
+            } else if (targetTile.territory !== 0) {
+                // Other enemy buildings can't be moved onto
+                showDirectionIndicator(actualDx, actualDy);
+                return;
+            }
+        }
+        
         // Update player position
         gameState.player.x = newX;
         gameState.player.y = newY;
@@ -2009,7 +2270,7 @@ function movePlayer(dx, dy) {
             y: newY
         };
         
-        // Check for resources on the tile
+        // Check for resource gathering
         const tile = gameState.map[newY][newX];
         if (tile.resource) {
             gatherResource(tile);
@@ -2025,8 +2286,11 @@ function movePlayer(dx, dy) {
             centerCameraOnPlayer();
         }
         
-        // Hareketi göster
+        // Show movement direction indicator
         showDirectionIndicator(actualDx, actualDy);
+        
+        // Update soldier positions (they follow the player)
+        updateSoldierPositions();
     } else {
         showMessage("Cannot move outside the map!");
     }
@@ -2300,19 +2564,23 @@ function updateGameState(deltaTime) {
     // Update soldier training
     updateSoldierTraining(deltaTime);
     
-    // Update soldier positions to follow player
-    updateSoldierPositions();
-    
-    // Update enemy movement and behavior
+    // Update enemies
     updateEnemies(deltaTime);
     
-    // Reduce combat cooldown
+    // Update enemy kingdoms (gathering resources, building, expanding)
+    updateEnemyKingdoms(deltaTime);
+    
+    // Decrease combat cooldown if active
     if (gameState.combatCooldown > 0) {
         gameState.combatCooldown = Math.max(0, gameState.combatCooldown - deltaTime);
     }
     
-    // Update debug info
-    updateDebugInfo();
+    // Update soldier positions
+    updateSoldierPositions();
+    
+    // Update military stats
+    updateMilitaryStats();
+    updateMilitaryUI();
 }
 
 // Update soldier training for houses
@@ -2358,6 +2626,12 @@ function updateSoldierTraining(deltaTime) {
 // Update enemy movement and behavior
 function updateEnemies(deltaTime) {
     for (const enemy of gameState.enemies) {
+        // Check if this enemy is in gathering mode, handle separately
+        if (enemy.isGathering || enemy.returningToCapital) {
+            updateEnemyGathering(enemy, deltaTime);
+            continue;
+        }
+        
         // Add elapsed time to enemy's last moved time
         enemy.lastMoved += deltaTime;
         
@@ -2365,7 +2639,10 @@ function updateEnemies(deltaTime) {
         if (enemy.lastMoved > enemy.moveDelay) {
             enemy.lastMoved = 0;
             
-            // Simple AI: enemies move toward player if near, otherwise random movement
+            // Get the enemy's kingdom for territory checking
+            const kingdom = gameState.kingdoms[enemy.kingdomId];
+            
+            // Simple AI: enemies move toward player if near, otherwise mostly stay in their territory
             const distToPlayer = Math.sqrt(
                 Math.pow(enemy.x - gameState.player.x, 2) + 
                 Math.pow(enemy.y - gameState.player.y, 2)
@@ -2374,7 +2651,7 @@ function updateEnemies(deltaTime) {
             let moveX = 0;
             let moveY = 0;
             
-            if (distToPlayer < 10) {
+            if (distToPlayer < 10 && Math.random() < 0.3) { // 30% chance to aggro when player is near
                 // Move toward player
                 if (enemy.x < gameState.player.x) moveX = 1;
                 else if (enemy.x > gameState.player.x) moveX = -1;
@@ -2387,14 +2664,53 @@ function updateEnemies(deltaTime) {
                     if (Math.random() < 0.5) moveX = 0;
                     else moveY = 0;
                 }
+                
+                // Flag that this enemy is aggressive
+                enemy.isAggressive = true;
             } else {
-                // Random movement
-                const randomDir = Math.floor(Math.random() * 4);
-                switch (randomDir) {
-                    case 0: moveX = 1; break;  // Right
-                    case 1: moveX = -1; break; // Left
-                    case 2: moveY = 1; break;  // Down
-                    case 3: moveY = -1; break; // Up
+                // Reset aggression flag
+                enemy.isAggressive = false;
+                
+                // 90% chance to stay within or near their own territory
+                if (Math.random() < 0.9) {
+                    // Calculate distance to kingdom capital
+                    const distToCapital = Math.sqrt(
+                        Math.pow(enemy.x - kingdom.capitalX, 2) + 
+                        Math.pow(enemy.y - kingdom.capitalY, 2)
+                    );
+                    
+                    // If too far from capital, move back toward it
+                    if (distToCapital > 5) {
+                        if (enemy.x < kingdom.capitalX) moveX = 1;
+                        else if (enemy.x > kingdom.capitalX) moveX = -1;
+                        
+                        if (enemy.y < kingdom.capitalY) moveY = 1;
+                        else if (enemy.y > kingdom.capitalY) moveY = -1;
+                        
+                        // Only move in one direction at a time
+                        if (moveX !== 0 && moveY !== 0) {
+                            if (Math.random() < 0.5) moveX = 0;
+                            else moveY = 0;
+                        }
+                    } else {
+                        // Random movement near capital
+                        const randomDir = Math.floor(Math.random() * 4);
+                        switch (randomDir) {
+                            case 0: moveX = 1; break;  // Right
+                            case 1: moveX = -1; break; // Left
+                            case 2: moveY = 1; break;  // Down
+                            case 3: moveY = -1; break; // Up
+                        }
+                    }
+                } else {
+                    // 10% chance for completely random movement
+                    const randomDir = Math.floor(Math.random() * 4);
+                    switch (randomDir) {
+                        case 0: moveX = 1; break;  // Right
+                        case 1: moveX = -1; break; // Left
+                        case 2: moveY = 1; break;  // Down
+                        case 3: moveY = -1; break; // Up
+                    }
                 }
             }
             
@@ -2406,11 +2722,11 @@ function updateEnemies(deltaTime) {
             if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
                 const tile = gameState.map[newY][newX];
                 
-                if (tile.building) {
-                    // Attack walls and buildings
-                    if (tile.isWall || tile.building) {
-                        const building = gameState.buildings.find(b => b.x === newX && b.y === newY) ||
-                                       gameState.enemyBuildings.find(b => b.x === newX && b.y === newY);
+                // Only attack buildings if the enemy is aggressive
+                if (tile.building && enemy.isAggressive) {
+                    // Only attack player's buildings
+                    if (tile.territory === 0) {
+                        const building = gameState.buildings.find(b => b.x === newX && b.y === newY);
                         
                         if (building) {
                             // Damage the wall/building
@@ -2431,36 +2747,38 @@ function updateEnemies(deltaTime) {
                                     gameState.buildings.splice(buildingIndex, 1);
                                 }
                                 
-                                // Remove from enemy buildings if applicable
-                                const enemyBuildingIndex = gameState.enemyBuildings.findIndex(b => b.x === newX && b.y === newY);
-                                if (enemyBuildingIndex !== -1) {
-                                    gameState.enemyBuildings.splice(enemyBuildingIndex, 1);
-                                }
-                                
                                 showMessage(`${building.type} has been destroyed!`);
                             }
                         }
+                    } else {
+                        // Don't attack own kingdom's buildings
+                        if (tile.territory !== enemy.kingdomId) {
+                            enemy.x = newX;
+                            enemy.y = newY;
+                        }
                     }
                 } else {
-                    // Move to empty tile
-                    enemy.x = newX;
-                    enemy.y = newY;
-                    
-                    // Check if enemy is adjacent to player
-                    const dx = Math.abs(enemy.x - gameState.player.x);
-                    const dy = Math.abs(enemy.y - gameState.player.y);
-                    
-                    if (dx <= 1 && dy <= 1) {
-                        // Enemy attacks player
-                        enemyAttackPlayer(enemy);
+                    // Don't move onto player's buildings
+                    if (!tile.building || tile.territory !== 0) {
+                        // Don't leave own territory when not aggressive
+                        if (enemy.isAggressive || tile.territory === enemy.kingdomId || tile.territory === null) {
+                            enemy.x = newX;
+                            enemy.y = newY;
+                            
+                            // Check if enemy is adjacent to player
+                            const dx = Math.abs(enemy.x - gameState.player.x);
+                            const dy = Math.abs(enemy.y - gameState.player.y);
+                            
+                            if (dx <= 1 && dy <= 1 && enemy.isAggressive) {
+                                // Enemy attacks player
+                                enemyAttackPlayer(enemy);
+                            }
+                        }
                     }
                 }
             }
         }
     }
-    
-    // No longer automatically spawn random enemies
-    // This ensures MAX_KINGDOMS limit is respected
 }
 
 // Enemy attacks player
@@ -2741,55 +3059,87 @@ function enemyCounterattack(enemy) {
 
 // Attack enemy building
 function attackEnemyBuilding(buildingX, buildingY) {
-    // Find enemy building at the given coordinates
-    const enemyBuilding = gameState.enemyBuildings.find(b => 
-        b.x === buildingX && b.y === buildingY);
-    
-    if (!enemyBuilding) return;
-    
-    // Check if player is near the building
-    const dx = Math.abs(buildingX - gameState.player.x);
-    const dy = Math.abs(buildingY - gameState.player.y);
-    
-    if (dx > 1 || dy > 1) {
-        showMessage("You must be adjacent to the building to attack it!");
-        return;
+    // Check if player has military capability
+    if (gameState.soldiers.length === 0) {
+        showMessage("You need soldiers to attack enemy buildings!");
+        return false;
     }
     
-    // Calculate attack damage (player + soldiers)
-    const playerAttack = gameState.player.attack / 2; // Reduced damage to buildings
-    let totalAttack = playerAttack;
+    // Check if coordinates are valid and there's an enemy building there
+    if (buildingX < 0 || buildingX >= MAP_SIZE || buildingY < 0 || buildingY >= MAP_SIZE) {
+        return false;
+    }
     
-    // Get soldiers at the same position as player
-    const playerSoldiers = gameState.soldiers.filter(soldier => 
-        soldier.x === gameState.player.x && soldier.y === gameState.player.y);
+    const tile = gameState.map[buildingY][buildingX];
     
-    // Add soldier attack power
-    totalAttack += playerSoldiers.length * 3; // Each soldier adds 3 attack power against buildings
+    // Check if there's a building and it's an enemy building (not player's)
+    if (!tile.building) {
+        showMessage("No building to attack here!");
+        return false;
+    }
     
-    // Damage building
+    if (tile.territory === 0) {
+        showMessage("You can't attack your own buildings!");
+        return false;
+    }
+    
+    // Find the enemy building
+    let enemyBuilding = gameState.enemyBuildings.find(b => 
+        b.x === buildingX && b.y === buildingY);
+    
+    if (!enemyBuilding) {
+        // If not found directly, this might be a wall
+        if (tile.isWall) {
+            // Look for any wall at this position
+            const kingdom = gameState.kingdoms.find(k => k.id === tile.territory);
+            if (kingdom) {
+                // Create a representation of the enemy wall for attack purposes
+                enemyBuilding = {
+                    type: 'WALL',
+                    x: buildingX,
+                    y: buildingY,
+                    kingdomId: tile.territory,
+                    health: BUILDING_TYPES['WALL'].maxHealth
+                };
+                // Add to enemy buildings array for future reference
+                gameState.enemyBuildings.push(enemyBuilding);
+            }
+        }
+    }
+    
+    if (!enemyBuilding) {
+        showMessage("No enemy building found to attack!");
+        return false;
+    }
+    
+    // Calculate attack damage based on player's military power and nearby soldiers
+    const baseAttack = gameState.military.attack;
+    
+    // Count nearby soldiers for additional attack power
+    const nearbySoldiers = gameState.soldiers.filter(soldier => {
+        const dx = Math.abs(soldier.x - gameState.player.x);
+        const dy = Math.abs(soldier.y - gameState.player.y);
+        return dx <= 2 && dy <= 2; // Soldiers within 2 tiles will help
+    });
+    
+    const soldierAttack = nearbySoldiers.length * 5; // Each soldier adds 5 attack
+    const totalAttack = baseAttack + soldierAttack;
+    
+    // Apply damage to enemy building
     enemyBuilding.health -= totalAttack;
     
     // Show attack message
-    showMessage(`Attacked enemy building for ${totalAttack} damage!`);
+    showMessage(`Attacked enemy ${enemyBuilding.type} for ${totalAttack} damage!`);
     
     // Check if building is destroyed
     if (enemyBuilding.health <= 0) {
-        // Remove building from enemy buildings list
-        const buildingIndex = gameState.enemyBuildings.indexOf(enemyBuilding);
-        gameState.enemyBuildings.splice(buildingIndex, 1);
-        
-        // Remove building from map
-        const tile = gameState.map[buildingY][buildingX];
-        tile.building = null;
-        
-        // Give player resources as reward
-        gameState.resources.wood += 20;
-        gameState.resources.stone += 15;
-        
-        showMessage("Enemy building destroyed! Received resources as reward.");
-        updateUI();
+        // Remove the enemy building
+        destroyEnemyBuilding(enemyBuilding, buildingX, buildingY);
+        return true;
     }
+    
+    // Building was attacked but not destroyed
+    return false;
 }
 
 // Have soldiers follow the player
@@ -2902,11 +3252,12 @@ function buildWall() {
         return;
     }
     
-    // Check if tile is within player's territory or adjacent to it
+    // Check if tile is within player's territory or adjacent to it or adjacent to existing wall
     if (tile.territory !== 0) {
         let isAdjacentToTerritory = false;
+        let isAdjacentToWall = false;
         
-        // Check adjacent tiles for player territory
+        // Check adjacent tiles for player territory or walls
         for (let dy = -1; dy <= 1; dy++) {
             for (let dx = -1; dx <= 1; dx++) {
                 if (dx === 0 && dy === 0) continue; // Skip the tile itself
@@ -2917,15 +3268,17 @@ function buildWall() {
                 if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
                     if (gameState.map[ny][nx].territory === 0) {
                         isAdjacentToTerritory = true;
-                        break;
+                    }
+                    // Check if adjacent to existing wall
+                    if (gameState.map[ny][nx].isWall && gameState.map[ny][nx].territory === 0) {
+                        isAdjacentToWall = true;
                     }
                 }
             }
-            if (isAdjacentToTerritory) break;
         }
         
-        if (!isAdjacentToTerritory) {
-            showMessage('Walls must be built within or adjacent to your territory!');
+        if (!isAdjacentToTerritory && !isAdjacentToWall) {
+            showMessage('Walls must be built within or adjacent to your territory or walls!');
             return;
         }
     }
@@ -2966,15 +3319,20 @@ function buildWall() {
         // If tile wasn't already in player territory, claim it
         if (tile.territory !== 0) {
             tile.territory = 0;
-            
-            // Add this tile to the player's kingdom wall perimeter
-            const playerKingdom = gameState.kingdoms[0];
-            playerKingdom.wallPerimeter.push({
-                x: gameState.selectedTile.x,
-                y: gameState.selectedTile.y
-            });
-            
-            // Expand territory within the walls
+        }
+        
+        // Add this tile to the player's kingdom wall perimeter
+        const playerKingdom = gameState.kingdoms[0];
+        playerKingdom.wallPerimeter.push({
+            x: gameState.selectedTile.x,
+            y: gameState.selectedTile.y
+        });
+        
+        // Check if we've enclosed an area and expand territory within the walls
+        if (checkForEnclosure(gameState.selectedTile.x, gameState.selectedTile.y, 0)) {
+            // Identify and remove interior walls
+            removeInteriorWalls(0);
+            // Expand territory within walls
             expandTerritoryWithinWalls(0);
         }
         
@@ -3001,29 +3359,125 @@ function buildWall() {
     }
 }
 
-// Expand territory within a kingdom's walls
-function expandTerritoryWithinWalls(kingdomId) {
+// Check if a wall placement creates an enclosure
+function checkForEnclosure(x, y, kingdomId) {
+    // This is a simplified flood fill algorithm to check if we've created an enclosure
     const kingdom = gameState.kingdoms[kingdomId];
     
-    // Get set of wall coordinates for fast lookup
+    // Get wall coordinates for the kingdom
     const wallCoords = new Set();
     for (const wall of kingdom.wallPerimeter) {
         wallCoords.add(`${wall.x},${wall.y}`);
     }
     
-    // Start flood fill from kingdom capital
-    const queue = [{x: kingdom.capitalX, y: kingdom.capitalY}];
-    const visited = new Set([`${kingdom.capitalX},${kingdom.capitalY}`]);
+    // Add the new wall to the set
+    wallCoords.add(`${x},${y}`);
     
+    // Create a temporary set of visited tiles
+    const visited = new Set();
+    
+    // Start with a known empty tile at the edge of the map
+    const startPoints = [];
+    
+    // Check all 4 edges of the map for empty tiles
+    // Top edge
+    for (let x = 0; x < MAP_SIZE; x++) {
+        if (!wallCoords.has(`${x},0`)) {
+            startPoints.push({x, y: 0});
+        }
+    }
+    
+    // Bottom edge
+    for (let x = 0; x < MAP_SIZE; x++) {
+        if (!wallCoords.has(`${x},${MAP_SIZE-1}`)) {
+            startPoints.push({x, y: MAP_SIZE-1});
+        }
+    }
+    
+    // Left edge
+    for (let y = 0; y < MAP_SIZE; y++) {
+        if (!wallCoords.has(`0,${y}`)) {
+            startPoints.push({x: 0, y});
+        }
+    }
+    
+    // Right edge
+    for (let y = 0; y < MAP_SIZE; y++) {
+        if (!wallCoords.has(`${MAP_SIZE-1},${y}`)) {
+            startPoints.push({x: MAP_SIZE-1, y});
+        }
+    }
+    
+    // If we don't have any starting points, the whole map is enclosed (unlikely)
+    if (startPoints.length === 0) {
+        return true;
+    }
+    
+    // Use the first empty edge tile as a starting point
+    const queue = [startPoints[0]];
+    visited.add(`${startPoints[0].x},${startPoints[0].y}`);
+    
+    // Directions for flood fill
+    const directions = [
+        {dx: 1, dy: 0},
+        {dx: -1, dy: 0},
+        {dx: 0, dy: 1},
+        {dx: 0, dy: -1}
+    ];
+    
+    // Flood fill from the edge
     while (queue.length > 0) {
         const {x, y} = queue.shift();
         
-        // Set territory
-        if (gameState.map[y][x].territory !== kingdomId) {
-            gameState.map[y][x].territory = kingdomId;
+        for (const {dx, dy} of directions) {
+            const nx = x + dx;
+            const ny = y + dy;
+            const coordKey = `${nx},${ny}`;
+            
+            // If in bounds and not visited and not a wall
+            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE && 
+                !visited.has(coordKey) && !wallCoords.has(coordKey)) {
+                
+                visited.add(coordKey);
+                queue.push({x: nx, y: ny});
+            }
         }
+    }
+    
+    // Now check if there are any unvisited tiles that aren't walls
+    // Those would be enclosed areas
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const coordKey = `${x},${y}`;
+            
+            if (!visited.has(coordKey) && !wallCoords.has(coordKey)) {
+                // Found an enclosed area
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+// Identify and remove interior walls
+function removeInteriorWalls(kingdomId) {
+    const kingdom = gameState.kingdoms[kingdomId];
+    
+    // First, we need to identify which walls are on the perimeter and which are interior
+    const wallCoords = new Set();
+    for (const wall of kingdom.wallPerimeter) {
+        wallCoords.add(`${wall.x},${wall.y}`);
+    }
+    
+    // Identify interior walls
+    const interiorWalls = [];
+    
+    for (const wall of kingdom.wallPerimeter) {
+        let isExterior = false;
         
-        // Try to expand in 4 directions
+        // A wall is exterior if it has at least one adjacent non-wall tile
+        // that's outside (not enclosed)
         const directions = [
             {dx: 1, dy: 0},
             {dx: -1, dy: 0},
@@ -3032,28 +3486,154 @@ function expandTerritoryWithinWalls(kingdomId) {
         ];
         
         for (const {dx, dy} of directions) {
-            const nx = x + dx;
-            const ny = y + dy;
-            const coordKey = `${nx},${ny}`;
+            const nx = wall.x + dx;
+            const ny = wall.y + dy;
             
-            // Check if in bounds and not visited
-            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE && !visited.has(coordKey)) {
-                visited.add(coordKey);
+            // Check if the adjacent tile is outside the map or not a wall
+            if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE || 
+                !wallCoords.has(`${nx},${ny}`)) {
                 
+                // Now we need to check if this non-wall is part of the outside
+                // or part of an enclosed area
+                if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                    // If this is a territory of another kingdom, it's exterior
+                    if (gameState.map[ny][nx].territory !== null && 
+                        gameState.map[ny][nx].territory !== kingdomId) {
+                        isExterior = true;
+                        break;
+                    }
+                } else {
+                    // If it's outside the map bounds, it's exterior
+                    isExterior = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!isExterior) {
+            interiorWalls.push(wall);
+        }
+    }
+    
+    // Remove interior walls
+    for (const wall of interiorWalls) {
+        // Find the wall in the game buildings
+        const wallBuilding = gameState.buildings.find(b => 
+            b.x === wall.x && b.y === wall.y && b.type === 'WALL');
+        
+        if (wallBuilding) {
+            destroyPlayerWall(wallBuilding, wall.x, wall.y);
+        }
+    }
+    
+    if (interiorWalls.length > 0) {
+        showMessage(`Removed ${interiorWalls.length} interior walls.`);
+    }
+}
+
+// Expand territory within a kingdom's walls
+function expandTerritoryWithinWalls(kingdomId) {
+    const kingdom = gameState.kingdoms[kingdomId];
+    if (!kingdom) return;
+    
+    // Get set of wall coordinates for fast lookup
+    const wallCoords = new Set();
+    for (const wall of kingdom.wallPerimeter) {
+        wallCoords.add(`${wall.x},${wall.y}`);
+    }
+    
+    // For each wall, try to flood fill inward
+    const floodPoints = [];
+    
+    for (const wall of kingdom.wallPerimeter) {
+        const directions = [
+            {dx: 1, dy: 0},
+            {dx: -1, dy: 0},
+            {dx: 0, dy: 1},
+            {dx: 0, dy: -1}
+        ];
+        
+        for (const {dx, dy} of directions) {
+            const nx = wall.x + dx;
+            const ny = wall.y + dy;
+            
+            // If in bounds and not a wall
+            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE && 
+                !wallCoords.has(`${nx},${ny}`)) {
+                
+                // Check if the tile is not part of another kingdom's walls
                 const tile = gameState.map[ny][nx];
-                
-                // If this is a wall tile of our kingdom, don't go beyond it
-                if (wallCoords.has(coordKey)) {
-                    continue;
+                if (!tile.isWall || tile.territory === kingdomId) {
+                // Mark this as a potential flood fill starting point
+                floodPoints.push({x: nx, y: ny});
                 }
+            }
+        }
+    }
+    
+    // We'll also always include the capital as a starting point
+    floodPoints.push({x: kingdom.capitalX, y: kingdom.capitalY});
+    
+    // Create a visited set for the flood fill
+    const visited = new Set();
+    
+    // For each potential flood point, try a flood fill
+    for (const point of floodPoints) {
+        const coordKey = `${point.x},${point.y}`;
+        
+        if (visited.has(coordKey)) continue;
+        
+        // Check if this is another kingdom's territory
+        const startTile = gameState.map[point.y][point.x];
+        if (startTile.territory !== null && startTile.territory !== kingdomId) {
+            continue; // Don't claim other kingdoms' territory
+        }
+        
+        // Do a flood fill from this point
+        const queue = [point];
+        visited.add(coordKey);
+        
+        while (queue.length > 0) {
+            const {x, y} = queue.shift();
+            
+            // Set territory only if not already claimed by another kingdom
+            if (gameState.map[y][x].territory === null || gameState.map[y][x].territory === kingdomId) {
+                gameState.map[y][x].territory = kingdomId;
+            }
+            
+            // Try to expand in 4 directions
+            const directions = [
+                {dx: 1, dy: 0},
+                {dx: -1, dy: 0},
+                {dx: 0, dy: 1},
+                {dx: 0, dy: -1}
+            ];
+            
+            for (const {dx, dy} of directions) {
+                const nx = x + dx;
+                const ny = y + dy;
+                const nextCoordKey = `${nx},${ny}`;
                 
-                // If this tile already belongs to another kingdom, don't claim it
-                if (tile.territory !== null && tile.territory !== kingdomId) {
-                    continue;
+                // Check if in bounds and not visited
+                if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE && 
+                    !visited.has(nextCoordKey)) {
+                    
+                    visited.add(nextCoordKey);
+                    
+                    // If this is a wall tile of our kingdom, don't go beyond it
+                    if (wallCoords.has(nextCoordKey) || gameState.map[ny][nx].isWall) {
+                        continue;
+                    }
+                    
+                    // If this tile already belongs to another kingdom, don't claim it
+                    if (gameState.map[ny][nx].territory !== null && 
+                        gameState.map[ny][nx].territory !== kingdomId) {
+                        continue;
+                    }
+                    
+                    // Add to queue to continue expanding
+                    queue.push({x: nx, y: ny});
                 }
-                
-                // Add to queue to continue expanding
-                queue.push({x: nx, y: ny});
             }
         }
     }
@@ -3067,7 +3647,7 @@ function drawTerritoryOverlay(screenX, screenY, territoryId, isCapital = false) 
     const territoryColor = KINGDOM_COLORS[territoryId];
     
     // Draw territory overlay
-    gameCtx.globalAlpha = 0.2; // Subtle transparency
+    gameCtx.globalAlpha = territoryId === 0 ? 0.35 : 0.2; // Player territory more visible
     
     gameCtx.fillStyle = territoryColor;
     gameCtx.beginPath();
@@ -3170,5 +3750,589 @@ function updateMilitaryUI() {
     }
 }
 
+// Update enemy kingdoms (gather resources and expand)
+function updateEnemyKingdoms(deltaTime) {
+    // Only update every few seconds to save performance
+    if (!gameState.lastKingdomUpdate) {
+        gameState.lastKingdomUpdate = 0;
+    }
+    
+    gameState.lastKingdomUpdate += deltaTime;
+    
+    // Update enemy kingdoms every 5 seconds
+    if (gameState.lastKingdomUpdate > 5000) {
+        gameState.lastKingdomUpdate = 0;
+        
+        // Skip player kingdom (id 0)
+        for (let i = 1; i < gameState.kingdoms.length; i++) {
+            const kingdom = gameState.kingdoms[i];
+            
+            // Send enemies to gather resources instead of automatically generating them
+            if (Math.random() < 0.7) { // 70% chance to try gathering
+                enemyGatherResources(kingdom);
+            }
+            
+            // Attempt to expand territory sometimes
+            if (Math.random() < 0.2) { // 20% chance to try expansion
+                expandEnemyKingdom(kingdom);
+            }
+            
+            // Build new buildings occasionally
+            if (Math.random() < 0.05) { // 5% chance each update
+                buildEnemyBuilding(kingdom);
+            }
+        }
+    }
+}
+
+// Enemy kingdoms go out to gather resources
+function enemyGatherResources(kingdom) {
+    // Find enemies that belong to this kingdom
+    const kingdomEnemies = gameState.enemies.filter(enemy => enemy.kingdomId === kingdom.id);
+    
+    if (kingdomEnemies.length === 0) return;
+    
+    // Randomly select one enemy to go foraging
+    const forager = kingdomEnemies[Math.floor(Math.random() * kingdomEnemies.length)];
+    
+    // Skip if this enemy is already gathering or returning to capital
+    if (forager.isGathering || forager.returningToCapital) return;
+    
+    // Set this enemy in gathering mode (non-aggressive)
+    forager.isGathering = true;
+    forager.isAggressive = false;
+    
+    // Find all resource nodes on the map
+    let nearestResource = null;
+    let shortestDistance = Infinity;
+    
+    // Search for the nearest resource
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const tile = gameState.map[y][x];
+            
+            if (tile.resource) {
+                const distance = Math.sqrt(
+                    Math.pow(x - forager.x, 2) + 
+                    Math.pow(y - forager.y, 2)
+                );
+                
+                // Find the closest resource
+                if (distance < shortestDistance && distance > 0) {
+                    shortestDistance = distance;
+                    nearestResource = {x, y, type: tile.resource};
+                }
+            }
+        }
+    }
+    
+    // If a resource was found, set it as target
+    if (nearestResource) {
+        forager.gatheringTarget = nearestResource;
+        forager.returningToCapital = false;
+        
+        // Set up path to resource
+        const pathToResource = [];
+        const targetX = nearestResource.x;
+        const targetY = nearestResource.y;
+        
+        // Simple path calculation (can be improved later)
+        let currentX = forager.x;
+        let currentY = forager.y;
+        
+        while (currentX !== targetX || currentY !== targetY) {
+            if (currentX < targetX) currentX++;
+            else if (currentX > targetX) currentX--;
+            
+            if (currentY < targetY) currentY++;
+            else if (currentY > targetY) currentY--;
+            
+            pathToResource.push({x: currentX, y: currentY});
+        }
+        
+        forager.gatheringPath = pathToResource;
+        forager.pathIndex = 0;
+        forager.lastMoved = 0;
+        
+        // Slow down movement during gathering
+        forager.gatheringMoveDelay = forager.moveDelay * 1.5;
+    }
+}
+
+// Function to update enemy gathering behavior
+function updateEnemyGathering(enemy, deltaTime) {
+    if (!enemy.isGathering && !enemy.returningToCapital) return;
+    
+    // Track the time since last move
+    enemy.lastMoved += deltaTime;
+    
+    // Only move if enough time has passed
+    if (enemy.lastMoved <= (enemy.gatheringMoveDelay || enemy.moveDelay)) return;
+    
+    enemy.lastMoved = 0;
+    
+    if (enemy.isGathering && !enemy.returningToCapital) {
+        // Moving to resource
+        if (enemy.gatheringPath && enemy.pathIndex < enemy.gatheringPath.length) {
+            // Follow path to resource
+            const nextPosition = enemy.gatheringPath[enemy.pathIndex];
+            enemy.x = nextPosition.x;
+            enemy.y = nextPosition.y;
+            enemy.pathIndex++;
+            
+            // Check if reached the resource
+            if (enemy.pathIndex >= enemy.gatheringPath.length) {
+                // At resource location - gather it
+                const tile = gameState.map[enemy.y][enemy.x];
+                if (tile.resource === enemy.gatheringTarget.type) {
+                    // Gather resource with a chance based on tool quality
+                    const gatherAmount = 5 + Math.floor(Math.random() * 5);
+                    
+                    // Find enemy's kingdom
+                    const enemyKingdom = gameState.kingdoms[enemy.kingdomId];
+                    
+                    // Add resources to kingdom based on type
+                    switch (tile.resource) {
+                    case 'TREE':
+                            enemyKingdom.resources.wood += gatherAmount;
+                        break;
+                    case 'STONE':
+                            enemyKingdom.resources.stone += gatherAmount;
+                        break;
+                        case 'BERRY':
+                            enemyKingdom.resources.food += gatherAmount;
+                        break;
+                }
+                
+                    // Clear resource with a chance
+                    if (Math.random() < 0.6) {
+                        tile.resource = null;
+                    }
+                    
+                    // Switch to returning mode
+                    enemy.isGathering = false;
+                    enemy.returningToCapital = true;
+                    
+                    // Set up return path to capital
+                    const homeKingdom = gameState.kingdoms[enemy.kingdomId];
+                    const pathBackHome = [];
+                    const capitalX = homeKingdom.capitalX;
+                    const capitalY = homeKingdom.capitalY;
+                    
+                    // Simple path calculation for returning
+                    let currentX = enemy.x;
+                    let currentY = enemy.y;
+                    
+                    while (currentX !== capitalX || currentY !== capitalY) {
+                        if (currentX < capitalX) currentX++;
+                        else if (currentX > capitalX) currentX--;
+                        
+                        if (currentY < capitalY) currentY++;
+                        else if (currentY > capitalY) currentY--;
+                        
+                        pathBackHome.push({x: currentX, y: currentY});
+                    }
+                    
+                    enemy.gatheringPath = pathBackHome;
+                    enemy.pathIndex = 0;
+                }
+            }
+        }
+    } else if (enemy.returningToCapital) {
+        // Returning to capital
+        if (enemy.gatheringPath && enemy.pathIndex < enemy.gatheringPath.length) {
+            // Follow path back home
+            const nextPosition = enemy.gatheringPath[enemy.pathIndex];
+            enemy.x = nextPosition.x;
+            enemy.y = nextPosition.y;
+            enemy.pathIndex++;
+            
+            // Check if reached the capital
+            if (enemy.pathIndex >= enemy.gatheringPath.length) {
+                // Reset gathering state
+                enemy.isGathering = false;
+                enemy.returningToCapital = false;
+                enemy.gatheringTarget = null;
+                enemy.gatheringPath = null;
+                
+                // Show a resource gathering message for the kingdom
+                if (Math.random() < 0.3) { // Only show it sometimes to reduce spam
+                    showMessage(`Kingdom ${enemy.kingdomId} has gathered resources!`);
+                }
+            }
+        }
+    }
+}
+
+// Expand enemy kingdom territory by adding new walls
+function expandEnemyKingdom(kingdom) {
+    // Check if enough time has passed since last expansion
+    const currentTime = Date.now();
+    if (currentTime - kingdom.lastExpansion < 10000 / kingdom.expansionRate) {
+        return; // Not enough time has passed
+    }
+    
+    // Update last expansion time
+    kingdom.lastExpansion = currentTime;
+    
+    // Get the outer boundary of the kingdom
+    const outerTiles = [];
+    
+    // Find all outer tiles near kingdom territory
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            // Skip if this is not within reasonable distance of kingdom
+            const distToCapital = Math.sqrt(
+                Math.pow(x - kingdom.capitalX, 2) + 
+                Math.pow(y - kingdom.capitalY, 2)
+            );
+            
+            // Skip tiles too far from capital
+            if (distToCapital > 30) continue;
+            
+            // Skip if this tile already has a wall or building
+            const tile = gameState.map[y][x];
+            if (tile.building || tile.isWall) continue;
+            
+            // Check if this tile is adjacent to the kingdom but not part of it
+            let adjacentToKingdom = false;
+            let adjacentToTerritory = false;
+            
+            // Check all 8 adjacent tiles
+            for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                    if (dx === 0 && dy === 0) continue; // Skip self
+                    
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    
+                    // Check if within map bounds
+                    if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                        const neighborTile = gameState.map[ny][nx];
+                        
+                        // If the neighboring tile belongs to this kingdom
+                        if (neighborTile.territory === kingdom.id) {
+                            adjacentToKingdom = true;
+                        }
+                        
+                        // If the neighboring tile is already claimed by any kingdom
+                        if (neighborTile.territory !== null) {
+                            adjacentToTerritory = true;
+                        }
+                    }
+                }
+            }
+            
+            // Add to outer tiles if adjacent to kingdom but not surrounded by claimed territory
+            if (adjacentToKingdom && !tile.territory) {
+                outerTiles.push({x, y});
+            }
+        }
+    }
+    
+    // Randomly select a direction to expand - pick a random group of adjacent outer tiles
+    if (outerTiles.length > 0) {
+        // Select a random starting point
+        const startIndex = Math.floor(Math.random() * outerTiles.length);
+        const startTile = outerTiles[startIndex];
+        
+        // Find adjacent tiles to the starting tile
+        const expansionTiles = [startTile];
+        
+        // Add a few adjacent expansion tiles (up to 5 total)
+        for (let i = 0; i < outerTiles.length && expansionTiles.length < 5; i++) {
+            if (i === startIndex) continue; // Skip the starting tile
+            
+            const tile = outerTiles[i];
+            const dx = Math.abs(tile.x - startTile.x);
+            const dy = Math.abs(tile.y - startTile.y);
+            
+            // If this tile is adjacent to the starting tile, add it
+            if (dx <= 1 && dy <= 1) {
+                expansionTiles.push(tile);
+            }
+        }
+        
+        // Apply expansion - add walls and territory
+        for (const tile of expansionTiles) {
+            // Check if there's any building or wall already
+            if (gameState.map[tile.y][tile.x].building || 
+                gameState.map[tile.y][tile.x].isWall) {
+                continue;
+            }
+            
+            // Ensure no other kingdom already claimed this tile
+            if (gameState.map[tile.y][tile.x].territory !== null && 
+                gameState.map[tile.y][tile.x].territory !== kingdom.id) {
+                continue;
+            }
+            
+            // Add a wall
+            gameState.map[tile.y][tile.x].building = 'WALL';
+            gameState.map[tile.y][tile.x].isWall = true;
+            gameState.map[tile.y][tile.x].territory = kingdom.id;
+            
+            // Track this wall in kingdom
+            kingdom.wallPerimeter.push({x: tile.x, y: tile.y});
+            
+            // Add to enemy buildings
+            gameState.enemyBuildings.push({
+                type: 'WALL',
+                x: tile.x,
+                y: tile.y,
+                owner: 'enemy',
+                kingdomId: kingdom.id,
+                health: BUILDING_TYPES['WALL'].maxHealth
+            });
+        }
+        
+        // After expanding, identify and remove interior walls
+        removeInteriorWalls(kingdom.id);
+        
+        // Expand territory within the walls
+        expandTerritoryWithinWalls(kingdom.id);
+    }
+}
+
+// Identify and remove interior walls
+function removeInteriorWalls(kingdomId) {
+    const kingdom = gameState.kingdoms[kingdomId];
+    if (!kingdom) return;
+    
+    // First, we need to identify which walls are on the perimeter and which are interior
+    const wallCoords = new Set();
+    for (const wall of kingdom.wallPerimeter) {
+        wallCoords.add(`${wall.x},${wall.y}`);
+    }
+    
+    // Identify interior walls
+    const interiorWalls = [];
+    
+    for (const wall of kingdom.wallPerimeter) {
+        let isExterior = false;
+        
+        // A wall is exterior if it has at least one adjacent non-wall tile
+        // that's outside (not enclosed)
+                const directions = [
+                    {dx: 1, dy: 0},
+                    {dx: -1, dy: 0},
+                    {dx: 0, dy: 1},
+                    {dx: 0, dy: -1}
+                ];
+                
+                for (const {dx, dy} of directions) {
+            const nx = wall.x + dx;
+            const ny = wall.y + dy;
+            
+            // Check if the adjacent tile is outside the map or not a wall
+            if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE || 
+                !wallCoords.has(`${nx},${ny}`)) {
+                
+                // Now we need to check if this non-wall is part of the outside
+                // or part of an enclosed area
+                    if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
+                    // If this is a territory of another kingdom, it's exterior
+                    if (gameState.map[ny][nx].territory !== null && 
+                        gameState.map[ny][nx].territory !== kingdomId) {
+                        isExterior = true;
+                        break;
+                    }
+                    
+                    // If this tile doesn't have a territory, it's exterior
+                    if (gameState.map[ny][nx].territory === null) {
+                        isExterior = true;
+                            break;
+                        }
+                } else {
+                    // If it's outside the map bounds, it's exterior
+                    isExterior = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!isExterior) {
+            interiorWalls.push(wall);
+        }
+    }
+    
+    // Remove interior walls
+    for (const wall of interiorWalls) {
+        // Find the wall in the enemy buildings list
+        const wallBuilding = gameState.enemyBuildings.find(b => 
+            b.x === wall.x && b.y === wall.y && b.type === 'WALL' && b.kingdomId === kingdomId);
+        
+        if (wallBuilding) {
+            // Remove from enemy buildings
+            const wallBuildingIndex = gameState.enemyBuildings.indexOf(wallBuilding);
+            if (wallBuildingIndex !== -1) {
+                gameState.enemyBuildings.splice(wallBuildingIndex, 1);
+            }
+        }
+        
+        // Remove from map
+        const mapTile = gameState.map[wall.y][wall.x];
+        mapTile.building = null;
+        mapTile.isWall = false;
+        
+        // Keep the territory assignment
+        
+        // Remove from kingdom walls
+        const wallIndex = kingdom.wallPerimeter.findIndex(w => w.x === wall.x && w.y === wall.y);
+        if (wallIndex !== -1) {
+            kingdom.wallPerimeter.splice(wallIndex, 1);
+        }
+    }
+    
+    if (interiorWalls.length > 0) {
+        console.log(`Removed ${interiorWalls.length} interior walls for kingdom ${kingdomId}`);
+    }
+}
+
+// Build a new building in enemy kingdom
+function buildEnemyBuilding(kingdom) {
+    // Check resource availability 
+    const canBuildHouse = kingdom.resources.wood >= BUILDING_TYPES.HOUSE.woodCost &&
+                         kingdom.resources.stone >= BUILDING_TYPES.HOUSE.stoneCost;
+                         
+    const canBuildBarracks = kingdom.resources.wood >= BUILDING_TYPES.BARRACKS.woodCost &&
+                            kingdom.resources.stone >= BUILDING_TYPES.BARRACKS.stoneCost;
+    
+    if (!canBuildHouse && !canBuildBarracks) {
+        return; // Not enough resources
+    }
+    
+    // Find an empty tile within the territory
+    const emptyTiles = [];
+    
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const tile = gameState.map[y][x];
+            
+            // If this is a tile of the current kingdom and it's empty
+            if (tile.territory === kingdom.id && !tile.building && !tile.resource) {
+                emptyTiles.push({x, y});
+            }
+        }
+    }
+    
+    if (emptyTiles.length === 0) {
+        return; // No empty tiles for building
+    }
+    
+    // Select a random empty tile
+    const buildTile = emptyTiles[Math.floor(Math.random() * emptyTiles.length)];
+    const x = buildTile.x;
+    const y = buildTile.y;
+    
+    // Decide what to build (prefer barracks if can afford, otherwise house)
+    let buildingType;
+    
+    if (canBuildBarracks && Math.random() < 0.3) { // 30% chance for barracks if can afford
+        buildingType = 'BARRACKS';
+    } else if (canBuildHouse) {
+        buildingType = 'HOUSE';
+    } else {
+        return;
+    }
+    
+    // Build the structure
+    const buildingInfo = BUILDING_TYPES[buildingType];
+    
+    // Deduct resources
+    kingdom.resources.wood -= buildingInfo.woodCost;
+    kingdom.resources.stone -= buildingInfo.stoneCost;
+    
+    // Place building on map
+    gameState.map[y][x].building = buildingType;
+    
+    // Add to enemy buildings
+    gameState.enemyBuildings.push({
+        type: buildingType,
+        x: x,
+        y: y,
+        owner: 'enemy',
+        kingdomId: kingdom.id,
+        health: buildingInfo.maxHealth
+    });
+}
+
 // Start the game when page loads
 window.addEventListener('load', initGame);
+
+// Destroy enemy building function
+function destroyEnemyBuilding(building, x, y) {
+    // Remove the building from enemyBuildings array
+    const buildingIndex = gameState.enemyBuildings.indexOf(building);
+    if (buildingIndex !== -1) {
+        gameState.enemyBuildings.splice(buildingIndex, 1);
+    }
+    
+    // Clear the building from the map
+    const tile = gameState.map[y][x];
+    tile.building = null;
+    
+    // If it's a wall, also clear wall flag
+    if (building.type === 'WALL') {
+        tile.isWall = false;
+        
+        // Get the kingdom that owned the wall
+        const kingdomId = building.kingdomId;
+        const kingdom = gameState.kingdoms[kingdomId];
+        
+        // Remove wall from kingdom's wallPerimeter
+        const wallIndex = kingdom.wallPerimeter.findIndex(w => w.x === x && w.y === y);
+        if (wallIndex !== -1) {
+            kingdom.wallPerimeter.splice(wallIndex, 1);
+        }
+        
+        // Check if this was a conquest (convert territory)
+        tile.territory = 0; // Claim for player
+        
+        // Show message about wall conquest
+        showMessage(`You've broken through Kingdom ${kingdomId}'s defenses!`);
+        
+        // Check if there are adjacent enemies to counterattack
+        const nearbyEnemies = gameState.enemies.filter(enemy => {
+            const dx = Math.abs(enemy.x - x);
+            const dy = Math.abs(enemy.y - y);
+            return dx <= 2 && dy <= 2 && enemy.kingdomId === kingdomId;
+        });
+        
+        // Enemy counterattack chance when wall is broken
+        if (nearbyEnemies.length > 0 && Math.random() < 0.7) {
+            const attackingEnemy = nearbyEnemies[0];
+            enemyCounterattack(attackingEnemy);
+        }
+    } else {
+        // If this was a capital building, it's a major conquest
+        if (building.isCapital) {
+            const kingdomId = building.kingdomId;
+            showMessage(`You've conquered a major building of Kingdom ${kingdomId}!`);
+            
+            // Give player resources as plunder
+            const plunderResources = {
+                wood: 20 + Math.floor(Math.random() * 30),
+                stone: 15 + Math.floor(Math.random() * 20),
+                food: 10 + Math.floor(Math.random() * 15)
+            };
+            
+            gameState.resources.wood += plunderResources.wood;
+            gameState.resources.stone += plunderResources.stone;
+            gameState.resources.food += plunderResources.food;
+            
+            showMessage(`You plundered ${plunderResources.wood} wood, ${plunderResources.stone} stone, and ${plunderResources.food} food!`);
+            
+            // Claim territory for player
+            tile.territory = 0;
+        }
+    }
+    
+    // Play destruction sound
+    const destroySound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgA');
+    destroySound.volume = 0.3;
+    destroySound.play().catch(() => {});
+    
+    // Update UI
+    updateUI();
+}
