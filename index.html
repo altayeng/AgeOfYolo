@@ -3,94 +3,550 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Age of Empires: Imperial Dawn</title>
+    <title>Imperial Dawn 2025</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <!-- Material Icons Outlined -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <!-- Material Icons Round -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
 </head>
 <body>
+    <!-- Main Menu Overlay -->
+    <div id="main-menu" class="main-menu-overlay">
+        <div class="main-menu-container">
+            <h1 class="game-title">Imperial Dawn</h1>
+            <div class="menu-options">
+                <button id="new-game-btn" class="menu-button">
+                    <i class="material-icons-round">play_arrow</i>
+                    <span data-i18n="New Game">New Game</span>
+                </button>
+                <button id="continue-btn" class="menu-button">
+                    <i class="material-icons-round">restore</i>
+                    <span data-i18n="Continue">Continue</span>
+                </button>
+                <button id="saved-games-btn" class="menu-button">
+                    <i class="material-icons-round">save</i>
+                    <span data-i18n="Saved Games">Saved Games</span>
+                </button>
+                <button id="settings-btn" class="menu-button">
+                    <i class="material-icons-round">settings</i>
+                    <span data-i18n="Settings">Settings</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Saved Games Panel (Hidden by default) -->
+    <div id="saved-games-panel" class="side-panel">
+        <div class="panel-header">
+            <h2><i class="material-icons-round">save</i> <span data-i18n="Saved Games">Saved Games</span></h2>
+            <button id="close-saved-games" class="close-button">
+                <i class="material-icons-round">close</i>
+            </button>
+        </div>
+        
+        <div class="panel-content">
+            <div class="saved-games-list" id="saved-games-list">
+                <!-- Saved games will be inserted here dynamically -->
+                <div class="no-saves-message" data-i18n="No saved games found">No saved games found</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Settings Panel (Hidden by default) -->
+    <div id="settings-panel" class="side-panel">
+        <div class="panel-header">
+            <h2><i class="material-icons-round">settings</i> <span data-i18n="Settings">Settings</span></h2>
+            <button id="close-settings" class="close-button">
+                <i class="material-icons-round">close</i>
+            </button>
+        </div>
+        
+        <div class="panel-content">
+            <div class="settings-section">
+                <h3 data-i18n="Game Settings">Game Settings</h3>
+                <div class="setting-item">
+                    <label for="difficulty-select" data-i18n="Difficulty">Difficulty:</label>
+                    <select id="difficulty-select" class="setting-control">
+                        <option value="easy" data-i18n="Easy">Easy</option>
+                        <option value="normal" data-i18n="Normal" selected>Normal</option>
+                        <option value="hard" data-i18n="Hard">Hard</option>
+                    </select>
+                </div>
+                
+                <div class="setting-item">
+                    <label for="music-volume" data-i18n="Music Volume">Music Volume:</label>
+                    <input type="range" id="music-volume" class="setting-control" min="0" max="100" value="70">
+                </div>
+                
+                <div class="setting-item">
+                    <label for="sfx-volume" data-i18n="Sound Effects">Sound Effects:</label>
+                    <input type="range" id="sfx-volume" class="setting-control" min="0" max="100" value="80">
+                </div>
+                
+                <div class="setting-item">
+                    <label for="language-select" data-i18n="Language">Language:</label>
+                    <select id="language-select" class="setting-control">
+                        <option value="en" selected>English</option>
+                        <option value="tr">Türkçe</option>
+                        <option value="es">Español</option>
+                        <option value="fr">Français</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="settings-actions">
+                <button id="save-settings" class="settings-button" data-i18n="Save Settings">Save Settings</button>
+                <button id="reset-settings" class="settings-button secondary" data-i18n="Reset to Default">Reset to Default</button>
+            </div>
+        </div>
+    </div>
+
     <div id="game-container">
+        <!-- Top Navigation Bar -->
         <div id="top-bar">
-            <div class="age-info" id="current-age">Dark Age</div>
-            <div class="game-time" id="game-time">Year: 0</div>
+            <div class="top-bar-section">
+                <div class="age-info" id="current-age">
+                    <i class="material-icons-round">history_edu</i>
+                    <span data-i18n="Dark Age">Dark Age</span>
+                </div>
+                <div class="game-time" id="game-time">
+                    <i class="material-icons-round">calendar_month</i>
+                    <span><span data-i18n="Year">Year</span>: 0</span>
+                </div>
+            </div>
+            
+            <div class="top-bar-section">
+                <button id="economy-button" class="nav-button">
+                    <i class="material-icons-round">account_balance</i>
+                    <span data-i18n="Economy">Economy</span>
+                </button>
+                <button id="diplomacy-button" class="nav-button">
+                    <i class="material-icons-round">handshake</i>
+                    <span data-i18n="Diplomacy">Diplomacy</span>
+                </button>
+                <button id="save-game-button" class="nav-button">
+                    <i class="material-icons-round">save</i>
+                    <span data-i18n="Save">Save</span>
+                </button>
+                <button id="menu-button" class="nav-button">
+                    <i class="material-icons-round">menu</i>
+                </button>
+            </div>
+            
             <div class="military-info" id="military-info">
                 <div class="military-stat">
-                    <span class="military-icon"><i class="fas fa-sword"></i></span>
+                    <span class="military-icon"><i class="material-icons-round">military_tech</i></span>
                     <span class="military-value" id="attack-value">10</span>
                 </div>
                 <div class="military-stat">
-                    <span class="military-icon"><i class="fas fa-shield-alt"></i></span>
+                    <span class="military-icon"><i class="material-icons-round">security</i></span>
                     <span class="military-value" id="defense-value">5</span>
                 </div>
                 <div id="military-needs"></div>
             </div>
         </div>
         
+        <!-- Main Game Canvas -->
         <canvas id="game-canvas"></canvas>
         
-        <div id="minimap-container">
-            <canvas id="minimap"></canvas>
-            <div id="minimap-label">MINI MAP</div>
-        </div>
-        
-        <div id="ui-container">
-            <div id="resources">
-                <div class="resource">
-                    <span class="resource-icon"><i class="fas fa-tree"></i></span>
-                    <span class="resource-count" id="wood-count">0</span>
-                </div>
-                <div class="resource">
-                    <span class="resource-icon"><i class="fas fa-mountain"></i></span>
-                    <span class="resource-count" id="stone-count">0</span>
-                </div>
-                <div class="resource">
-                    <span class="resource-icon"><i class="fas fa-drumstick-bite"></i></span>
-                    <span class="resource-count" id="food-count">0</span>
-                </div>
-                <div class="resource">
-                    <span class="resource-icon"><i class="fas fa-users"></i></span>
-                    <span class="resource-count" id="population-count">0/10</span>
-                </div>
+        <!-- Diplomacy Panel (Hidden by default) -->
+        <div id="diplomacy-panel" class="side-panel">
+            <div class="panel-header">
+                <h2><i class="material-icons-round">handshake</i> <span data-i18n="Diplomacy">Diplomacy</span></h2>
+                <button id="close-diplomacy" class="close-button">
+                    <i class="material-icons-round">close</i>
+                </button>
             </div>
             
-            <div id="actions">
-                <div class="action-group">
-                    <div class="group-title">Buildings</div>
-                    <div class="buttons-row">
-                        <button id="build-house" class="building-button">
-                            House
-                        </button>
-                        <button id="build-barracks" class="building-button">
-                            Barracks
-                        </button>
-                        <button id="build-mill" class="building-button">
-                            Mill
-                        </button>
-                        <button id="build-tower" class="building-button">
-                            Tower
-                        </button>
+            <div class="panel-content">
+                <div class="diplomacy-status">
+                    <div class="diplomacy-reputation">
+                        <div class="reputation-label" data-i18n="Your Reputation">Your Reputation:</div>
+                        <div class="reputation-meter">
+                            <div class="reputation-fill" id="reputation-level" style="width: 65%;"></div>
+                        </div>
+                        <div class="reputation-value" id="reputation-value">65</div>
                     </div>
                 </div>
                 
-                <div class="action-group">
-                    <div class="group-title">Actions</div>
-                    <div class="buttons-row">
-                        <button id="gather" class="action-button">
-                            Gather
-                        </button>
-                        <button id="craft-tool" class="action-button">
-                            Craft Tool
-                        </button>
-                        <button id="advance-age" class="action-button">
-                            Advance Age
-                        </button>
+                <div class="diplomacy-factions">
+                    <h3 data-i18n="Known Factions">Known Factions</h3>
+                    <div class="faction-list" id="faction-list">
+                        <!-- Faction items will be inserted here by JavaScript -->
+                        <div class="faction-item" data-faction-id="northern-tribe">
+                            <div class="faction-icon">🏔️</div>
+                            <div class="faction-details">
+                                <div class="faction-name">Northern Tribe</div>
+                                <div class="faction-relation diplomatic-neutral">Neutral</div>
+                            </div>
+                            <div class="faction-actions">
+                                <button class="faction-action" data-action="dialog">
+                                    <i class="material-icons-round">chat</i>
+                                </button>
+                                <button class="faction-action" data-action="trade">
+                                    <i class="material-icons-round">swap_horiz</i>
+                                </button>
+                                <button class="faction-action" data-action="alliance">
+                                    <i class="material-icons-round">handshake</i>
+                                </button>
+                                <button class="faction-action" data-action="war">
+                                    <i class="material-icons-round">gavel</i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="faction-item" data-faction-id="eastern-empire">
+                            <div class="faction-icon">🏯</div>
+                            <div class="faction-details">
+                                <div class="faction-name">Eastern Empire</div>
+                                <div class="faction-relation diplomatic-enemy">Hostile</div>
+                            </div>
+                            <div class="faction-actions">
+                                <button class="faction-action" data-action="dialog">
+                                    <i class="material-icons-round">chat</i>
+                                </button>
+                                <button class="faction-action" data-action="trade">
+                                    <i class="material-icons-round">swap_horiz</i>
+                                </button>
+                                <button class="faction-action" data-action="alliance">
+                                    <i class="material-icons-round">handshake</i>
+                                </button>
+                                <button class="faction-action" data-action="war">
+                                    <i class="material-icons-round">gavel</i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="faction-item" data-faction-id="western-kingdom">
+                            <div class="faction-icon">🏰</div>
+                            <div class="faction-details">
+                                <div class="faction-name">Western Kingdom</div>
+                                <div class="faction-relation diplomatic-ally">Ally</div>
+                            </div>
+                            <div class="faction-actions">
+                                <button class="faction-action" data-action="dialog">
+                                    <i class="material-icons-round">chat</i>
+                                </button>
+                                <button class="faction-action" data-action="trade">
+                                    <i class="material-icons-round">swap_horiz</i>
+                                </button>
+                                <button class="faction-action" data-action="alliance">
+                                    <i class="material-icons-round">handshake</i>
+                                </button>
+                                <button class="faction-action" data-action="war">
+                                    <i class="material-icons-round">gavel</i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="diplomacy-treaties">
+                    <h3 data-i18n="Treaties & Agreements">Treaties & Agreements</h3>
+                    <div class="treaty-list" id="treaty-list">
+                        <!-- Treaty items will be inserted here by JavaScript -->
+                        <div class="treaty-item">
+                            <div class="treaty-icon">📜</div>
+                            <div class="treaty-details">
+                                <div class="treaty-name">Trade Agreement</div>
+                                <div class="treaty-parties">You & Western Kingdom</div>
+                                <div class="treaty-duration">12 years remaining</div>
+                            </div>
+                        </div>
+                        
+                        <div class="treaty-item">
+                            <div class="treaty-icon">⚔️</div>
+                            <div class="treaty-details">
+                                <div class="treaty-name">Military Alliance</div>
+                                <div class="treaty-parties">You & Western Kingdom</div>
+                                <div class="treaty-duration">8 years remaining</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div id="game-message"></div>
+        <!-- Economy Panel (Hidden by default) -->
+        <div id="economy-panel" class="side-panel">
+            <div class="panel-header">
+                <h2><i class="material-icons-round">account_balance</i> <span data-i18n="Economy">Economy</span></h2>
+                <button id="close-economy" class="close-button">
+                    <i class="material-icons-round">close</i>
+                </button>
+            </div>
+            
+            <div class="panel-content">
+                <div class="economy-overview">
+                    <div class="economy-stat">
+                        <div class="stat-label" data-i18n="Treasury">Treasury:</div>
+                        <div class="stat-value" id="gold-amount">100 <i class="fas fa-coins gold-icon"></i></div>
+                    </div>
+                    <div class="economy-stat">
+                        <div class="stat-label" data-i18n="Tax Rate">Tax Rate:</div>
+                        <div class="stat-value" id="tax-rate">5%</div>
+                        <div class="stat-controls">
+                            <button class="micro-button" id="decrease-tax"><i class="material-icons-round">remove</i></button>
+                            <button class="micro-button" id="increase-tax"><i class="material-icons-round">add</i></button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="market-section">
+                    <h3 data-i18n="Market">Market</h3>
+                    <div class="market-grid">
+                        <div class="market-row">
+                            <div class="resource-label">
+                                <i class="material-icons-round">forest</i> <span data-i18n="Wood">Wood</span>
+                            </div>
+                            <div class="market-price" id="wood-price">1.0</div>
+                            <div class="market-actions">
+                                <button class="market-button buy-button" data-resource="wood" data-i18n="Buy">Buy</button>
+                                <button class="market-button sell-button" data-resource="wood" data-i18n="Sell">Sell</button>
+                            </div>
+                        </div>
+                        <div class="market-row">
+                            <div class="resource-label">
+                                <i class="material-icons-round">landscape</i> <span data-i18n="Stone">Stone</span>
+                            </div>
+                            <div class="market-price" id="stone-price">1.5</div>
+                            <div class="market-actions">
+                                <button class="market-button buy-button" data-resource="stone" data-i18n="Buy">Buy</button>
+                                <button class="market-button sell-button" data-resource="stone" data-i18n="Sell">Sell</button>
+                            </div>
+                        </div>
+                        <div class="market-row">
+                            <div class="resource-label">
+                                <i class="material-icons-round">restaurant</i> <span data-i18n="Food">Food</span>
+                            </div>
+                            <div class="market-price" id="food-price">0.8</div>
+                            <div class="market-actions">
+                                <button class="market-button buy-button" data-resource="food" data-i18n="Buy">Buy</button>
+                                <button class="market-button sell-button" data-resource="food" data-i18n="Sell">Sell</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="research-section">
+                    <h3 data-i18n="Research">Research</h3>
+                    <div class="research-progress">
+                        <div class="research-label" data-i18n="Research Points">Research Points:</div>
+                        <div class="research-meter">
+                            <div class="research-fill" id="research-level"></div>
+                        </div>
+                        <div class="research-value" id="research-points">25</div>
+                    </div>
+                    
+                    <div class="technologies-list">
+                        <div class="tech-item" data-tech-id="improved-farming">
+                            <div class="tech-icon"><i class="material-icons-round">agriculture</i></div>
+                            <div class="tech-details">
+                                <div class="tech-name" data-i18n="Improved Farming">Improved Farming</div>
+                                <div class="tech-effect" data-i18n="+20% Food Production">+20% Food Production</div>
+                                <div class="tech-cost"><span data-i18n="Cost">Cost</span>: 50 <span data-i18n="Points">Points</span></div>
+                            </div>
+                            <button class="tech-button" data-tech-id="improved-farming" data-i18n="Research">Research</button>
+                        </div>
+                        
+                        <div class="tech-item" data-tech-id="efficient-mining">
+                            <div class="tech-icon"><i class="material-icons-round">build</i></div>
+                            <div class="tech-details">
+                                <div class="tech-name" data-i18n="Efficient Mining">Efficient Mining</div>
+                                <div class="tech-effect" data-i18n="+20% Stone Production">+20% Stone Production</div>
+                                <div class="tech-cost"><span data-i18n="Cost">Cost</span>: 60 <span data-i18n="Points">Points</span></div>
+                            </div>
+                            <button class="tech-button" data-tech-id="efficient-mining" data-i18n="Research">Research</button>
+                        </div>
+                        
+                        <div class="tech-item" data-tech-id="advanced-logging">
+                            <div class="tech-icon"><i class="material-icons-round">park</i></div>
+                            <div class="tech-details">
+                                <div class="tech-name" data-i18n="Advanced Logging">Advanced Logging</div>
+                                <div class="tech-effect" data-i18n="+20% Wood Production">+20% Wood Production</div>
+                                <div class="tech-cost"><span data-i18n="Cost">Cost</span>: 55 <span data-i18n="Points">Points</span></div>
+                            </div>
+                            <button class="tech-button" data-tech-id="advanced-logging" data-i18n="Research">Research</button>
+                        </div>
+                        
+                        <div class="tech-item" data-tech-id="trade-routes">
+                            <div class="tech-icon"><i class="material-icons-round">directions_boat</i></div>
+                            <div class="tech-details">
+                                <div class="tech-name" data-i18n="Trade Routes">Trade Routes</div>
+                                <div class="tech-effect" data-i18n="+25% Trading Income">+25% Trading Income</div>
+                                <div class="tech-cost"><span data-i18n="Cost">Cost</span>: 80 <span data-i18n="Points">Points</span></div>
+                            </div>
+                            <button class="tech-button" data-tech-id="trade-routes" data-i18n="Research">Research</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- In-Game Menu Panel (Hidden by default) -->
+        <div id="in-game-menu-panel" class="side-panel">
+            <div class="panel-header">
+                <h2><i class="material-icons-round">menu</i> <span data-i18n="Game Menu">Game Menu</span></h2>
+                <button id="close-in-game-menu" class="close-button">
+                    <i class="material-icons-round">close</i>
+                </button>
+            </div>
+            
+            <div class="panel-content">
+                <div class="in-game-menu-options">
+                    <button id="resume-game-btn" class="menu-button">
+                        <i class="material-icons-round">play_arrow</i>
+                        <span data-i18n="Resume Game">Resume Game</span>
+                    </button>
+                    <button id="save-game-btn" class="menu-button">
+                        <i class="material-icons-round">save</i>
+                        <span data-i18n="Save Game">Save Game</span>
+                    </button>
+                    <button id="load-game-btn" class="menu-button">
+                        <i class="material-icons-round">restore</i>
+                        <span data-i18n="Load Game">Load Game</span>
+                    </button>
+                    <button id="game-settings-btn" class="menu-button">
+                        <i class="material-icons-round">settings</i>
+                        <span data-i18n="Settings">Settings</span>
+                    </button>
+                    <button id="exit-to-menu-btn" class="menu-button">
+                        <i class="material-icons-round">exit_to_app</i>
+                        <span data-i18n="Exit to Menu">Exit to Menu</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bottom UI Container with new layout -->
+        <div id="ui-container">
+            <!-- Left Section - Minimap -->
+            <div id="left-ui-section">
+                <div id="minimap-container">
+                    <canvas id="minimap"></canvas>
+                    <div id="minimap-label" data-i18n="MINI MAP">MINI MAP</div>
+                </div>
+            </div>
+            
+            <!-- Middle Section - Resources & Notifications -->
+            <div id="middle-ui-section">
+                <!-- Resources Bar -->
+                <div id="resources">
+                    <div class="resource wood-resource">
+                        <span class="resource-icon"><i class="material-icons-round">forest</i></span>
+                        <span class="resource-count" id="wood-count">115</span>
+                    </div>
+                    <div class="resource stone-resource">
+                        <span class="resource-icon"><i class="material-icons-round">landscape</i></span>
+                        <span class="resource-count" id="stone-count">86</span>
+                    </div>
+                    <div class="resource food-resource">
+                        <span class="resource-icon"><i class="material-icons-round">restaurant</i></span>
+                        <span class="resource-count" id="food-count">64</span>
+                    </div>
+                    <div class="resource population-resource">
+                        <span class="resource-icon"><i class="material-icons-round">groups</i></span>
+                        <span class="resource-count" id="population-count">0/10</span>
+                    </div>
+                    <div class="resource health-resource">
+                        <span class="resource-icon">❤️</span>
+                        <span class="resource-count" id="player-health">100/100</span>
+                    </div>
+                    <div class="resource soldiers-resource">
+                        <span class="resource-icon"><i class="material-icons-round">security</i></span>
+                        <span class="resource-count" id="soldiers-count">0</span>
+                    </div>
+                </div>
+                
+                <!-- Game Message (Notifications) -->
+                <div id="game-message">Enemy attacks WALL! (130 HP remaining)</div>
+            </div>
+            
+            <!-- Right Section - Action Buttons -->
+            <div id="right-ui-section">
+                <!-- Medieval-style action buttons -->
+                <div class="menu-buttons">
+                    <!-- Buildings Button -->
+                    <button id="buildings-button" class="main-button">
+                        <i class="material-icons-round">castle</i>
+                    </button>
+                    
+                    <!-- Actions Button -->
+                    <button id="actions-button" class="main-button">
+                        <i class="material-icons-round">settings</i>
+                    </button>
+                    
+                    <!-- Attack Button (Always Visible) -->
+                    <button id="attack" class="main-button attack-button">
+                        <i class="material-icons-round">gavel</i>
+                    </button>
+                    
+                    <!-- Buildings Menu -->
+                    <div id="buildings-menu" class="expandable-menu">
+                        <div class="menu-title" data-i18n="BUILDINGS">BUILDINGS</div>
+                        <div class="menu-content">
+                            <button id="build-house" class="building-button">
+                                <i class="material-icons-round">home</i>
+                                <span data-i18n="House">House</span>
+                            </button>
+                            <button id="build-barracks" class="building-button">
+                                <i class="material-icons-round">fort</i>
+                                <span data-i18n="Barracks">Barracks</span>
+                            </button>
+                            <button id="build-mill" class="building-button">
+                                <i class="material-icons-round">agriculture</i>
+                                <span data-i18n="Mill">Mill</span>
+                            </button>
+                            <button id="build-tower" class="building-button">
+                                <i class="material-icons-round">castle</i>
+                                <span data-i18n="Tower">Tower</span>
+                            </button>
+                            <button id="build-wall" class="building-button">
+                                <i class="material-icons-round">wall</i>
+                                <span data-i18n="Wall">Wall</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions Menu -->
+                    <div id="actions-menu" class="expandable-menu">
+                        <div class="menu-title" data-i18n="ACTIONS">ACTIONS</div>
+                        <div class="menu-content">
+                            <button id="gather" class="action-button">
+                                <i class="material-icons-round">pan_tool</i>
+                                <span data-i18n="Gather">Gather</span>
+                            </button>
+                            <button id="craft-tool" class="action-button">
+                                <i class="material-icons-round">build</i>
+                                <span data-i18n="Craft">Craft</span>
+                            </button>
+                            <button id="advance-age" class="action-button">
+                                <i class="material-icons-round">trending_up</i>
+                                <span data-i18n="Advance">Advance</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     
-    <script src="game.js"></script>
+    <!-- Game scripts -->
+    <script src="notifications.js"></script>
+    
+    <!-- Modular JS Files -->
+    <script src="js/core.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/buildings.js"></script>
+    <script src="js/enemies.js"></script>
+    <script src="js/ui.js"></script>
+    <script src="js/diplomacy.js"></script>
+    <script src="js/economy.js"></script>
+    <script src="js/main.js"></script>
 </body>
 </html>
