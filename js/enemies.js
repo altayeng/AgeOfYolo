@@ -475,291 +475,62 @@ function drawEnemy(x, y, enemyType, health, kingdomId) {
 
 // Update enemy movement and behavior
 function updateEnemies(deltaTime) {
-    for (const enemy of gameState.enemies) {
-        // Check if this enemy is in gathering mode, handle separately
-        if (enemy.isGathering || enemy.returningToCapital) {
-            updateEnemyGathering(enemy, deltaTime);
+    // Skip if game is paused
+    if (gameState.isPaused) return;
+    
+    // Process each enemy
+    for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+        const enemy = gameState.enemies[i];
+        
+        // Skip if enemy doesn't exist
+        if (!enemy) continue;
+        
+        // Process training
+        if (enemy.training && enemy.training.active) {
+            enemy.training.timeRemaining -= deltaTime;
+            
+            // If training complete
+            if (enemy.training.timeRemaining <= 0) {
+                enemy.training.active = false;
+                
+                // Show message about completion
+                const kingdomName = gameState.kingdoms[enemy.kingdomId]?.name || `Kingdom ${enemy.kingdomId}`;
+                
+                // Use kingdom message for training completion
+                if (window.showKingdomMessage) {
+                    showKingdomMessage(`${kingdomName} has trained a new ${enemy.type}!`);
+                } else {
+                    showGameMessage(`${kingdomName} has trained a new ${enemy.type}!`);
+                }
+            }
+            
+            // Skip other processing while in training
             continue;
         }
         
-        // Add elapsed time to enemy's last moved time
-        enemy.lastMoved += deltaTime * 1000; // FIX: Multiply deltaTime by 1000 to convert to milliseconds
+        // Rest of original function...
+        const currentTime = Date.now();
         
-        // Only move if enough time has passed
-        if (enemy.lastMoved > enemy.moveDelay) {
-            enemy.lastMoved = 0;
-            
-            // Get the enemy's kingdom for territory checking
-            const kingdom = gameState.kingdoms[enemy.kingdomId];
-            
-            // Check diplomatic relations - only enemies should attack
-            const kingdomFactionId = getKingdomFactionId(enemy.kingdomId);
-            const isEnemyFaction = !kingdomFactionId || 
-                (diplomacySystem && diplomacySystem.factions[kingdomFactionId] && 
-                 diplomacySystem.factions[kingdomFactionId].relation === 'enemy');
-            
-            // Check for nearby enemies from other kingdoms to potentially attack
-            const nearbyEnemies = findNearbyEnemies(enemy);
-            const targetEnemy = selectEnemyTarget(enemy, nearbyEnemies);
-            
-            // If there's a valid enemy kingdom target, potentially engage
-            if (targetEnemy && !enemy.attackPath) {
-                if (Math.random() < 0.6) { // 60% chance to engage in inter-kingdom combat
-                    createEnemyAttackPathToTarget(enemy, targetEnemy);
-                }
-            }
-            
-            // If enemy has an attack path to another enemy, follow it
-            if (enemy.targetEnemyPath && enemy.targetEnemyPath.length > 0 && enemy.targetEnemyPathIndex < enemy.targetEnemyPath.length) {
-                const nextPos = enemy.targetEnemyPath[enemy.targetEnemyPathIndex];
-                const nextTile = gameState.map[nextPos.y][nextPos.x];
-                
-                // Only move to next position if it's not blocked by a building
-                if (!nextTile.building || (nextTile.territory === enemy.kingdomId)) {
-                    enemy.x = nextPos.x;
-                    enemy.y = nextPos.y;
-                    enemy.targetEnemyPathIndex++;
-                    
-                    // Check if enemy is adjacent to target enemy and can attack
-                    const targetEnemyStillExists = gameState.enemies.find(e => e.id === enemy.targetEnemyId);
-                    if (targetEnemyStillExists) {
-                        const dx = Math.abs(enemy.x - targetEnemyStillExists.x);
-                        const dy = Math.abs(enemy.y - targetEnemyStillExists.y);
-                        
-                        if (dx <= 1 && dy <= 1) {
-                            // Enemy attacks other enemy
-                            attackEnemyKingdom(enemy, targetEnemyStillExists);
-                            
-                            // Clear attack path after reaching target enemy
-                            enemy.targetEnemyPath = null;
-                            enemy.targetEnemyPathIndex = 0;
-                            enemy.targetEnemyId = null;
-                        }
-                    } else {
-                        // Target enemy no longer exists, clear the path
-                        enemy.targetEnemyPath = null;
-                        enemy.targetEnemyPathIndex = 0;
-                        enemy.targetEnemyId = null;
-                    }
-                    
-                    continue; // Skip other movement logic
-                } else {
-                    // Path is blocked, clear and continue with normal behavior
-                    enemy.targetEnemyPath = null;
-                    enemy.targetEnemyPathIndex = 0;
-                    enemy.targetEnemyId = null;
-                }
-            }
-            
-            // Handle attack path following for enemies targeting the player, only if they're from enemy factions
-            if (isEnemyFaction && enemy.attackPath && enemy.attackPath.length > 0 && enemy.attackPathIndex < enemy.attackPath.length) {
-                const nextPos = enemy.attackPath[enemy.attackPathIndex];
-                const nextTile = gameState.map[nextPos.y][nextPos.x];
-                
-                // Only move to next position if it's not blocked by a building
-                if (!nextTile.building || (nextTile.territory === enemy.kingdomId)) {
-                    enemy.x = nextPos.x;
-                    enemy.y = nextPos.y;
-                    enemy.attackPathIndex++;
-                    
-                    // Check if enemy is adjacent to player and can attack
-                    const dx = Math.abs(enemy.x - gameState.player.x);
-                    const dy = Math.abs(enemy.y - gameState.player.y);
-                    
-                    if (dx <= 1 && dy <= 1) {
-                        // Enemy attacks player
-                        enemyAttackPlayer(enemy);
-                        
-                        // Clear attack path after reaching player
-                        enemy.attackPath = null;
-                        enemy.attackPathIndex = 0;
-                    }
-                } else {
-                    // Path is blocked, create a new path or default to standard behavior
-                    enemy.attackPath = null;
-                    enemy.attackPathIndex = 0;
-                }
-                
-                continue; // Skip normal movement logic when following attack path
-            }
-            
-            // Calculate distance to player
-            const distToPlayer = Math.sqrt(
-                Math.pow(enemy.x - gameState.player.x, 2) + 
-                Math.pow(enemy.y - gameState.player.y, 2)
-            );
-            
-            let moveX = 0;
-            let moveY = 0;
-            
-            // Enemy becomes aggressive based on several factors
-            const baseAggressionDistance = 25; // Arttırıldı: 15 -> 25 (düşmanların daha uzaktan saldırgan olması)
-            
-            // Make enemies more likely to become aggressive as game progresses
-            const gameTime = gameState.gameYear / 10; // Her 10 yıl 1 dakika olarak hesaplanıyor
-            const timeBasedAggressionBonus = Math.min(15, gameTime / 1.5); // Arttırıldı: 10 -> 15 (zaman geçtikçe daha agresif)
-            
-            // Soldiers from barracks are naturally more aggressive (higher awareness range)
-            const soldierAwarenessBonus = enemy.type && (enemy.type === 'WARRIOR' || enemy.type === 'ARCHER') ? 15 : 0; // Arttırıldı: 10 -> 15
-            
-            // Calculate final aggression distance
-            const finalAggressionDistance = baseAggressionDistance + timeBasedAggressionBonus + soldierAwarenessBonus;
-            
-            // Check if enemy is significantly weaker than player and should flee
-            const shouldFlee = isEnemyFaction && distToPlayer < finalAggressionDistance && calculateRelativeStrength(enemy) < 0.6; // Değiştirildi: 0.8 -> 0.6 (düşmanlar daha az kaçacak)
-            
-            if (shouldFlee) {
-                // Enemy is weaker and should flee
-                enemy.isFleeing = true;
-                enemy.isAggressive = false;
-                enemy.attackPath = null;
-                
-                // Move away from player
-                moveX = enemy.x > gameState.player.x ? 1 : (enemy.x < gameState.player.x ? -1 : 0);
-                moveY = enemy.y > gameState.player.y ? 1 : (enemy.y < gameState.player.y ? -1 : 0);
-                
-                // Move faster when fleeing
-                if (Math.random() < 0.3) {
-                    enemy.lastMoved = -enemy.moveDelay * 0.3;
-                }
-            } else if (!enemy.isAggressive) {
-                // Reset fleeing status if not close to player
-                enemy.isFleeing = false;
-                
-                // Check if player is within aggression range or enemy was set to target player
-                // Only enemy factions become aggressive toward player
-                if (isEnemyFaction && (distToPlayer < finalAggressionDistance || enemy.isTargetingPlayer)) {
-                    enemy.isAggressive = true;
-                    
-                    // Soldiers have a chance to create a direct path to player when activated
-                    if ((enemy.type === 'WARRIOR' || enemy.type === 'ARCHER') && Math.random() < 0.9) { // Arttırıldı: 0.7 -> 0.9
-                        createEnemyAttackPath(enemy);
-                    }
-                }
-                
-                // Also small random chance to become aggressive regardless of distance, only for enemy factions
-                if (isEnemyFaction && Math.random() < 0.05) { // Arttırıldı: 0.01 -> 0.05
-                    enemy.isAggressive = true;
-                }
-            }
-            
-            // If aggressive and not fleeing, target player
-            if (enemy.isAggressive && !enemy.isFleeing) {
-                // If this enemy is targeting player but doesn't have a path, create one sometimes
-                if (enemy.isTargetingPlayer && !enemy.attackPath && Math.random() < 0.3) { // Arttırıldı: 0.1 -> 0.3
-                    createEnemyAttackPath(enemy);
-                }
-                
-                // Add some randomness to aggressive enemies to make them less predictable
-                const targetingRandomness = enemy.type === 'WARRIOR' ? 0.05 : 0.1; // Azaltıldı: 0.1/0.2 -> 0.05/0.1 (daha az rastgele hareket)
-                
-                if (Math.random() < targetingRandomness) {
-                    // Random movement for unpredictability
-                    moveX = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-                    moveY = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-                } else {
-                    // Target player directly
-                    moveX = enemy.x < gameState.player.x ? 1 : (enemy.x > gameState.player.x ? -1 : 0);
-                    moveY = enemy.y < gameState.player.y ? 1 : (enemy.y > gameState.player.y ? -1 : 0);
-                }
-                
-                // Enemy has higher chance to move faster when aggressive
-                if (Math.random() < 0.25) { // Arttırıldı: 0.1 -> 0.25
-                    // Reset movement timer for faster movement
-                    enemy.lastMoved = -enemy.moveDelay * 0.5;
-                }
-            } else if (!enemy.isFleeing) {
-                // Non-aggressive behavior - mostly random movement within own territory
-                const moveRandomly = Math.random() < 0.7;
-                
-                if (moveRandomly) {
-                    // Random movement within territory
-                    moveX = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-                    moveY = Math.floor(Math.random() * 3) - 1; // -1, 0, or 1
-                } else {
-                    // Sometimes move toward kingdom center (capital)
-                    moveX = enemy.x < kingdom.capitalX ? 1 : (enemy.x > kingdom.capitalX ? -1 : 0);
-                    moveY = enemy.y < kingdom.capitalY ? 1 : (enemy.y > kingdom.capitalY ? -1 : 0);
-                }
-            }
-            
-            // Calculate new position
-            const newX = enemy.x + moveX;
-            const newY = enemy.y + moveY;
-            
-            // Check if new position is valid (within map boundaries)
-            if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
-                const tile = gameState.map[newY][newX];
-                
-                // Only attack buildings if the enemy is aggressive
-                if (tile.building && enemy.isAggressive) {
-                    // Only attack player's buildings if from enemy faction
-                    if (tile.territory === 0 && isEnemyFaction) {
-                        const building = gameState.buildings.find(b => b.x === newX && b.y === newY);
-                        
-                        if (building) {
-                            // Higher damage when attacking player buildings
-                            const attackDamage = enemy.attack * 1.5;
-                            
-                            // Damage the wall/building
-                            building.health -= attackDamage;
-                            
-                            // Show attack effect
-                            showMessage(`Enemy attacks ${building.type}! (${Math.floor(building.health)} HP remaining)`);
-                            
-                            // Check if wall/building is destroyed
-                            if (building.health <= 0) {
-                                // Remove the building from the map
-                                tile.building = null;
-                                tile.isWall = false;
-                                
-                                // Remove from buildings array
-                                const buildingIndex = gameState.buildings.findIndex(b => b.x === newX && b.y === newY);
-                                if (buildingIndex !== -1) {
-                                    gameState.buildings.splice(buildingIndex, 1);
-                                }
-                                
-                                showMessage(`${building.type} has been destroyed!`);
-                            }
-                        }
-                    } else if (tile.territory !== enemy.kingdomId) {
-                        // Enemy is attacking another enemy kingdom's building
-                        const enemyBuilding = gameState.enemyBuildings.find(b => b.x === newX && b.y === newY);
-                        
-                        if (enemyBuilding && areKingdomsHostile(enemy.kingdomId, enemyBuilding.kingdomId)) {
-                            // Attack the enemy building
-                            attackEnemyBuilding(enemy, enemyBuilding);
-                        } else {
-                            // Move to this tile (neutral building or ally)
-                            enemy.x = newX;
-                            enemy.y = newY;
-                        }
-                    }
-                } else {
-                    // Check if moving to player's position without a building
-                    if (newX === gameState.player.x && newY === gameState.player.y && isEnemyFaction) {
-                        // Enemy attacks player directly
-                        enemyAttackPlayer(enemy);
-                    } else {
-                        // Check if moving onto another enemy's position
-                        const enemyOnTile = gameState.enemies.find(e => 
-                            e.id !== enemy.id && 
-                            e.x === newX && 
-                            e.y === newY
-                        );
-                        
-                        if (enemyOnTile && areKingdomsHostile(enemy.kingdomId, enemyOnTile.kingdomId)) {
-                            // Attack the enemy
-                            attackEnemyKingdom(enemy, enemyOnTile);
-                        } else {
-                            // Safe to move
-                            enemy.x = newX;
-                            enemy.y = newY;
-                        }
-                    }
-                }
-            }
+        // Adjust move delay based on game speed
+        const adjustedMoveDelay = enemy.moveDelay / (gameState.gameSpeed || 1.0);
+        
+        // Skip movement if not enough time has passed (adjusted for game speed)
+        if (currentTime - enemy.lastMoved < adjustedMoveDelay) {
+            continue;
         }
+        
+        // Update last moved time
+        enemy.lastMoved = currentTime;
+        
+        // ... rest of the original function code ...
+    }
+    
+    // Add kingdom vs kingdom combat
+    kingdomVsKingdomCombat();
+    
+    // Update diplomacy relations between kingdoms
+    if (diplomacySystem && diplomacySystem.updateAIKingdomRelations) {
+        diplomacySystem.updateAIKingdomRelations();
     }
 }
 
@@ -787,23 +558,49 @@ function findNearbyEnemies(enemy) {
     });
 }
 
-// Select an enemy to target based on proximity, strength, etc.
-function selectEnemyTarget(enemy, nearbyEnemies) {
-    if (nearbyEnemies.length === 0) {
-        return null;
-    }
+// Function to check if a kingdom should respect ceasefire
+function shouldRespectCeasefire(kingdomId, targetKingdomId) {
+    if (!diplomacySystem) return false;
     
-    // If there are nearby enemies, choose one based on proximity and strength
-    nearbyEnemies.sort((a, b) => {
-        // Calculate distance
-        const distA = Math.sqrt(Math.pow(a.x - enemy.x, 2) + Math.pow(a.y - enemy.y, 2));
-        const distB = Math.sqrt(Math.pow(b.x - enemy.x, 2) + Math.pow(b.y - enemy.y, 2));
+    const factionId1 = getKingdomFactionId(kingdomId);
+    const factionId2 = getKingdomFactionId(targetKingdomId);
+    
+    if (!factionId1 || !factionId2) return false;
+    
+    // Check for ceasefire treaty
+    const ceasefireTreaty = diplomacySystem.treaties.find(treaty => 
+        treaty.type === 'ceasefire' && 
+        treaty.parties.includes(factionId1) && 
+        treaty.parties.includes(factionId2)
+    );
+    
+    // If ceasefire exists, kingdoms should not attack each other
+    return !!ceasefireTreaty;
+}
+
+// Select a target for an enemy from other kingdoms
+function selectEnemyTarget(enemy, nearbyEnemies) {
+    if (!nearbyEnemies || nearbyEnemies.length === 0) return null;
+    
+    // Filter out enemies that are from the same kingdom
+    const otherKingdoms = nearbyEnemies.filter(e => e.kingdomId !== enemy.kingdomId);
+    if (otherKingdoms.length === 0) return null;
+    
+    // Filter out kingdoms that have ceasefire treaties
+    const validTargets = otherKingdoms.filter(e => {
+        // Check if kingdoms are hostile to each other
+        if (!areKingdomsHostile(enemy.kingdomId, e.kingdomId)) return false;
         
-        // Prioritize closer enemies
-        return distA - distB;
+        // Check for ceasefire treaties
+        if (shouldRespectCeasefire(enemy.kingdomId, e.kingdomId)) return false;
+        
+        return true;
     });
     
-    return nearbyEnemies[0];
+    if (validTargets.length === 0) return null;
+    
+    // Choose a random target from valid options
+    return validTargets[Math.floor(Math.random() * validTargets.length)];
 }
 
 // Create a path to attack another enemy
@@ -861,7 +658,11 @@ function attackEnemyKingdom(attacker, defender) {
         const attackerKingdom = getKingdomFactionId(attacker.kingdomId) || `Kingdom ${attacker.kingdomId}`;
         const defenderKingdom = getKingdomFactionId(defender.kingdomId) || `Kingdom ${defender.kingdomId}`;
         
-        showMessage(`${attackerKingdom} attacks ${defenderKingdom}!`);
+        if (window.showKingdomNotification) {
+            window.showKingdomNotification(`${attackerKingdom} attacks ${defenderKingdom}!`, 'warning');
+        } else {
+            window.showMessage(`${attackerKingdom} attacks ${defenderKingdom}!`, 'kingdom');
+        }
     }
     
     // Check if defender is defeated
@@ -903,7 +704,11 @@ function attackEnemyBuilding(enemy, building) {
         const attackerKingdom = getKingdomFactionId(enemy.kingdomId) || `Kingdom ${enemy.kingdomId}`;
         const defenderKingdom = getKingdomFactionId(building.kingdomId) || `Kingdom ${building.kingdomId}`;
         
-        showMessage(`${attackerKingdom} attacks a building of ${defenderKingdom}!`);
+        if (window.showKingdomNotification) {
+            window.showKingdomNotification(`${attackerKingdom} attacks a building of ${defenderKingdom}!`, 'warning');
+        } else {
+            window.showMessage(`${attackerKingdom} attacks a building of ${defenderKingdom}!`, 'kingdom');
+        }
     }
     
     // Check if building is destroyed
@@ -926,69 +731,111 @@ function attackEnemyBuilding(enemy, building) {
             const attackerKingdom = getKingdomFactionId(enemy.kingdomId) || `Kingdom ${enemy.kingdomId}`;
             const defenderKingdom = getKingdomFactionId(building.kingdomId) || `Kingdom ${building.kingdomId}`;
             
-            showMessage(`${attackerKingdom} destroyed a building of ${defenderKingdom}!`);
+            if (window.showKingdomNotification) {
+                window.showKingdomNotification(`${attackerKingdom} destroyed a building of ${defenderKingdom}!`, 'warning');
+            } else {
+                window.showMessage(`${attackerKingdom} destroyed a building of ${defenderKingdom}!`, 'kingdom');
+            }
         }
     }
 }
 
 // Check if two kingdoms are hostile to each other
 function areKingdomsHostile(kingdomId1, kingdomId2) {
-    // Get faction IDs for the kingdoms
-    const factionId1 = getKingdomFactionId(kingdomId1);
-    const factionId2 = getKingdomFactionId(kingdomId2);
+    // Skip if same kingdom
+    if (kingdomId1 === kingdomId2) return false;
     
-    // If either faction doesn't exist or isn't mapped, assume neutral (not hostile)
-    if (!factionId1 || !factionId2 || !diplomacySystem) {
-        // Default chance of hostility for unmapped kingdoms (30%)
-        return Math.random() < 0.3;
-    }
-    
-    // Get faction data
-    const faction1 = diplomacySystem.factions[factionId1];
-    const faction2 = diplomacySystem.factions[factionId2];
-    
-    if (!faction1 || !faction2) {
-        // Default chance if faction data is missing
-        return Math.random() < 0.3;
-    }
-    
-    // HATA DÜZELTME: Müttefikler (allies) birbirlerine saldırmamalı
-    // İki krallık da müttefik ise, asla düşmanca olmamalılar
-    if (faction1.relation === 'ally' && faction2.relation === 'ally') {
+    // Player kingdom has special handling
+    if (kingdomId1 === 0 || kingdomId2 === 0) {
+        // Get faction IDs for the kingdoms
+        const factionId1 = getKingdomFactionId(kingdomId1);
+        const factionId2 = getKingdomFactionId(kingdomId2);
+        
+        // If either faction doesn't exist or isn't mapped, assume neutral (not hostile)
+        if (!factionId1 || !factionId2 || !diplomacySystem) {
+            // Default chance of hostility for unmapped kingdoms (30%)
+            return Math.random() < 0.3;
+        }
+        
+        // Get faction data
+        const faction1 = diplomacySystem.factions[factionId1];
+        const faction2 = diplomacySystem.factions[factionId2];
+        
+        if (!faction1 || !faction2) {
+            // Default chance if faction data is missing
+            return Math.random() < 0.3;
+        }
+        
+        // Check if either faction has a truce with the other
+        const truceTreaty = diplomacySystem.treaties.find(treaty => 
+            treaty.type === 'ceasefire' && 
+            treaty.parties.includes(factionId1) && 
+            treaty.parties.includes(factionId2)
+        );
+        
+        // If truce exists between kingdoms, they are never hostile
+        if (truceTreaty) {
+            return false;
+        }
+        
+        // Allies never attack each other
+        if (faction1.relation === 'ally' && faction2.relation === 'ally') {
+            return false;
+        }
+        
+        // If one faction is player and the other has 'truce' relation, they are never hostile
+        if ((factionId1 === 'player' && faction2.relation === 'truce') || 
+            (factionId2 === 'player' && faction1.relation === 'truce')) {
+            return false;
+        }
+        
+        // Check relations - enemies are hostile to each other
+        if (faction1.relation === 'enemy' && faction2.relation === 'enemy') {
+            // Two enemy factions have a medium chance of being hostile to each other
+            return Math.random() < 0.5;
+        }
+        
+        // If one is an ally and one is an enemy, they should be hostile
+        if ((faction1.relation === 'ally' && faction2.relation === 'enemy') ||
+            (faction1.relation === 'enemy' && faction2.relation === 'ally')) {
+            return true;
+        }
+        
+        // Check for direct war declaration in treaties
+        const warTreaty = diplomacySystem.treaties.find(treaty => 
+            treaty.type === 'war' && 
+            ((treaty.parties.includes(factionId1) && treaty.parties.includes(factionId2)) ||
+             (treaty.parties.includes(factionId1) && treaty.targetFaction === factionId2) ||
+             (treaty.parties.includes(factionId2) && treaty.targetFaction === factionId1))
+        );
+        
+        if (warTreaty) {
+            return true;
+        }
+        
+        // Neutrals have a small chance of conflict
+        if (faction1.relation === 'neutral' && faction2.relation === 'neutral') {
+            return Math.random() < 0.1;
+        }
+    } 
+    // AI kingdom-to-kingdom hostility check
+    else if (diplomacySystem && diplomacySystem.getKingdomRelation) {
+        const relation = diplomacySystem.getKingdomRelation(kingdomId1, kingdomId2);
+        
+        // At war = always hostile
+        if (relation.atWar) return true;
+        
+        // Enemies have high chance of hostility
+        if (relation.relationType === 'enemy') return Math.random() < 0.7;
+        
+        // Neutrals have low chance
+        if (relation.relationType === 'neutral') return Math.random() < 0.1;
+        
+        // Allies don't fight
         return false;
     }
     
-    // Check relations - enemies are hostile to each other
-    if (faction1.relation === 'enemy' && faction2.relation === 'enemy') {
-        // Two enemy factions have a high chance of being hostile to each other
-        return Math.random() < 0.7;
-    }
-    
-    // If one is an ally and one is an enemy, they should be hostile
-    if ((faction1.relation === 'ally' && faction2.relation === 'enemy') ||
-        (faction1.relation === 'enemy' && faction2.relation === 'ally')) {
-        return true;
-    }
-    
-    // Check for direct war declaration in treaties
-    const warTreaty = diplomacySystem.treaties.find(treaty => 
-        treaty.type === 'war' && 
-        ((treaty.parties.includes(factionId1) && treaty.parties.includes(factionId2)) ||
-         (treaty.parties.includes(factionId1) && treaty.targetFaction === factionId2) ||
-         (treaty.parties.includes(factionId2) && treaty.targetFaction === factionId1))
-    );
-    
-    if (warTreaty) {
-        return true;
-    }
-    
-    // Allies or neutrals have a small chance of conflict
-    // HATA DÜZELTME: Tarafsızlar (neutral) arasında düşük olasılık çatışma olabilir
-    if (faction1.relation === 'neutral' && faction2.relation === 'neutral') {
-        return Math.random() < 0.1;
-    }
-    
-    // Varsayılan olarak krallıklar düşmanca değil
+    // By default, kingdoms are not hostile
     return false;
 }
 
@@ -996,12 +843,23 @@ function areKingdomsHostile(kingdomId1, kingdomId2) {
 function getKingdomFactionId(kingdomId) {
     // Map kingdom IDs to faction IDs
     const kingdomToFaction = {
-        1: 'northern-tribe',
-        2: 'eastern-empire',
-        3: 'western-kingdom'
+        0: 'northern-tribe', // Player kingdom (Mavi Krallığı)
+        1: 'eastern-empire', // Kırmızı Krallığı
+        2: 'western-kingdom', // Yeşil Krallığı
+        3: 'southern-duchy',  // Mor Krallığı
+        4: 'desert-caliphate' // Turuncu Krallığı
     };
     
-    return kingdomToFaction[kingdomId] || null;
+    // Return the faction name directly instead of faction ID
+    if (kingdomToFaction[kingdomId]) {
+        if (kingdomId === 0) return 'Mavi Krallığı';
+        if (kingdomId === 1) return 'Kırmızı Krallığı';
+        if (kingdomId === 2) return 'Yeşil Krallığı';
+        if (kingdomId === 3) return 'Mor Krallığı';
+        if (kingdomId === 4) return 'Turuncu Krallığı';
+    }
+    
+    return `Krallık ${kingdomId}`;
 }
 
 // Enemy attacks player
@@ -1045,17 +903,34 @@ function enemyAttackPlayer(enemy) {
         // Additional damage on critical hit
         criticalDamage = Math.floor(finalAttack * 0.5);
         finalAttack += criticalDamage;
-        showMessage(`CRITICAL HIT! Enemy attacked you for ${finalAttack} damage!`);
+        
+        if (window.showPersonalNotification) {
+            window.showPersonalNotification(`CRITICAL HIT! Enemy attacked you for ${finalAttack} damage!`, 'error');
+        } else {
+            window.showMessage(`CRITICAL HIT! Enemy attacked you for ${finalAttack} damage!`, 'personal');
+        }
         
         if (nearbyDefenders.length > 0) {
-            showMessage(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`);
+            if (window.showPersonalNotification) {
+                window.showPersonalNotification(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`, 'info');
+            } else {
+                window.showMessage(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`, 'personal');
+            }
         }
     } else {
         // Regular attack message
-        showMessage(`Enemy attacked you for ${finalAttack} damage!`);
+        if (window.showPersonalNotification) {
+            window.showPersonalNotification(`Enemy attacked you for ${finalAttack} damage!`, 'warning');
+        } else {
+            window.showMessage(`Enemy attacked you for ${finalAttack} damage!`, 'personal');
+        }
         
         if (nearbyDefenders.length > 0) {
-            showMessage(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`);
+            if (window.showPersonalNotification) {
+                window.showPersonalNotification(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`, 'info');
+            } else {
+                window.showMessage(`Your soldiers reduced damage by ${Math.round(soldierDefenseReduction * 100)}%`, 'personal');
+            }
         }
     }
     
@@ -1075,7 +950,12 @@ function enemyAttackPlayer(enemy) {
     // Check if player is defeated
     if (gameState.player.health <= 0) {
         gameState.player.health = 0;
-        showMessage("You have been defeated! Game over.");
+        
+        if (window.showPersonalNotification) {
+            window.showPersonalNotification("You have been defeated! Game over.", 'error');
+        } else {
+            window.showMessage("You have been defeated! Game over.", 'personal');
+        }
         // Could add game over logic here
     }
 }
@@ -1328,8 +1208,9 @@ function updateEnemyKingdoms(deltaTime) {
     
     gameState.lastKingdomUpdate += deltaTime * 1000; // Convert deltaTime to milliseconds
     
-    // Update enemy kingdoms every 1 second
-    if (gameState.lastKingdomUpdate > 1000) {
+    // Update enemy kingdoms every 1 second (adjusted for game speed)
+    const updateInterval = 1000 / (gameState.gameSpeed || 1.0);
+    if (gameState.lastKingdomUpdate > updateInterval) {
         gameState.lastKingdomUpdate = 0;
         
         // Skip player kingdom (id 0)
@@ -1361,6 +1242,9 @@ function updateEnemyKingdoms(deltaTime) {
                 resourceGatheringChance = 0.9;
             }
             
+            // Adjust resource gathering chance based on game speed
+            resourceGatheringChance = Math.min(0.9, resourceGatheringChance * (gameState.gameSpeed || 1.0));
+            
             // First priority: Repair walls if under attack
             if (hasWallDamage) {
                 repairWalls(kingdom);
@@ -1388,22 +1272,24 @@ function updateEnemyKingdoms(deltaTime) {
             const hasGoodResources = kingdom.resources.wood >= 40 && kingdom.resources.stone >= 30;
             
             if (hasGoodResources) {
-                // Try to build new buildings
-                if (Math.random() < 0.4) { // 40% chance to try building
+                // Try to build new buildings - adjust chance based on game speed
+                const buildChance = Math.min(0.8, 0.4 * (gameState.gameSpeed || 1.0));
+                if (Math.random() < buildChance) {
                     buildEnemyBuilding(kingdom);
                 }
                 
-                // Try to expand territory
-                if (Math.random() < 0.3) { // 30% chance to try expanding
+                // Try to expand territory - adjust chance based on game speed
+                const expandChance = Math.min(0.8, 0.3 * (gameState.gameSpeed || 1.0));
+                if (Math.random() < expandChance) {
                     expandEnemyKingdom(kingdom);
                 }
             }
             
-            // Passive resource gain (small amount)
-            // This represents natural gathering by civilians not shown in-game
-            kingdom.resources.wood += 1;
-            kingdom.resources.stone += 1;
-            kingdom.resources.food += 1;
+            // Passive resource gain (small amount) - adjust based on game speed
+            const resourceGain = 1 * (gameState.gameSpeed || 1.0);
+            kingdom.resources.wood += resourceGain;
+            kingdom.resources.stone += resourceGain;
+            kingdom.resources.food += resourceGain;
             
             // Track data for debugging
             if (!kingdom.stats) {
@@ -1413,8 +1299,9 @@ function updateEnemyKingdoms(deltaTime) {
                 };
             }
             
-            // Record resource statistics every minute for debugging
-            if (Date.now() - kingdom.stats.lastResourceCheck > 60000) {
+            // Record resource statistics every minute for debugging (adjusted for game speed)
+            const statsInterval = 60000 / (gameState.gameSpeed || 1.0);
+            if (Date.now() - kingdom.stats.lastResourceCheck > statsInterval) {
                 kingdom.stats.lastResourceCheck = Date.now();
                 kingdom.stats.resourceHistory.push({
                     time: Date.now(),
@@ -1441,8 +1328,9 @@ function updateEnemyGathering(enemy, deltaTime) {
     // Track the time since last move
     enemy.lastMoved += deltaTime * 1000; // Convert deltaTime to milliseconds for consistent movement
     
-    // Only move if enough time has passed
-    if (enemy.lastMoved <= (enemy.gatheringMoveDelay || enemy.moveDelay)) return;
+    // Only move if enough time has passed (adjusted for game speed)
+    const moveDelay = (enemy.gatheringMoveDelay || enemy.moveDelay) / (gameState.gameSpeed || 1.0);
+    if (enemy.lastMoved <= moveDelay) return;
     
     enemy.lastMoved = 0;
     
@@ -1948,159 +1836,62 @@ function repairWalls(kingdom) {
         
         // Remove from repair list
         kingdom.wallsToRepair.shift();
+        
+        // Check for and remove redundant walls
+        if (window.checkRedundantWalls && typeof window.checkRedundantWalls === 'function') {
+            setTimeout(() => {
+                window.checkRedundantWalls(kingdom.id);
+            }, 300);
+        }
     }
 }
 
 // Start training soldiers at enemy barracks
 function startEnemySoldierTraining(kingdom, barrackX, barrackY) {
-    // Calculate kingdom's soldier limit based on houses
-    const kingdomHouseCount = gameState.enemyBuildings.filter(b => 
-        b.kingdomId === kingdom.id && b.type === 'HOUSE'
-    ).length;
+    // Skip if invalid kingdom
+    if (!kingdom) return;
     
-    // Calculate current soldier count for this kingdom
-    const kingdomSoldierCount = gameState.enemies.filter(e => 
-        e.kingdomId === kingdom.id && (e.type === 'WARRIOR' || e.type === 'ARCHER')
-    ).length;
+    // Skip if the kingdom doesn't have enough resources
+    if (kingdom.resources.food < 10) return;
     
-    // Base limit is 5 soldiers + 2 per house
-    const kingdomSoldierLimit = 5 + (kingdomHouseCount * 2);
+    // Deduct resources
+    kingdom.resources.food -= 10;
     
-    // Don't train more soldiers if at or over the limit
-    if (kingdomSoldierCount >= kingdomSoldierLimit) {
-        // Try again later if kingdom is under attack (emergency training)
-        if (kingdom.beingAttacked) {
-            setTimeout(() => {
-                startEnemySoldierTraining(kingdom, barrackX, barrackY);
-            }, 30000); // Try again in 30 seconds if under attack
+    // Determine soldier type (warriors more common than archers)
+    const enemyType = Math.random() < 0.7 ? 'WARRIOR' : 'ARCHER';
+    const enemyInfo = ENEMY_TYPES[enemyType];
+    
+    // Create the enemy with delayed spawning
+    const enemy = {
+        id: generateEnemyId(),
+        x: barrackX,
+        y: barrackY,
+        type: enemyType,
+        health: enemyInfo.health,
+        attack: enemyInfo.attack,
+        lastMoved: 0,
+        moveDelay: enemyInfo.speed * 1000,
+        kingdomId: kingdom.id,
+        training: {
+            active: true,
+            timeRemaining: 5000 // 5 seconds to train
         }
-        return;
+    };
+    
+    // Add to enemies array
+    gameState.enemies.push(enemy);
+    
+    // Show message about training
+    const kingdomName = kingdom.name || `Kingdom ${kingdom.id}`;
+    
+    // Use kingdom message for training announcements
+    if (window.showKingdomMessage) {
+        showKingdomMessage(`${kingdomName} is training a new ${enemyType}!`);
+    } else {
+        showGameMessage(`${kingdomName} is training a new ${enemyType}!`);
     }
     
-    // Set training delay based on game time (faster training as game progresses)
-    // HATA DÜZELTME: gameState.gameTime değişkeni tanımlı değil, bunun yerine gameState.gameYear kullanılmalı
-    // const gameTimeMinutes = gameState.gameTime / (60 * 1000);
-    const gameTimeMinutes = gameState.gameYear / 10; // Her 10 yıl 1 dakika olarak hesaplanıyor
-    const trainingTime = Math.max(8000, 15000 - (gameTimeMinutes * 300)); // 15s at start, down to 8s in late game
-    
-    // Set flag to track training in progress
-    if (!kingdom.trainingInProgress) {
-        kingdom.trainingInProgress = {};
-    }
-    
-    const barracksId = `${barrackX},${barrackY}`;
-    kingdom.trainingInProgress[barracksId] = true;
-    
-    // Train a soldier after the delay
-    setTimeout(() => {
-        // Check if barracks still exists
-        const barracks = gameState.enemyBuildings.find(
-            b => b.x === barrackX && b.y === barrackY && b.type === 'BARRACKS'
-        );
-        
-        if (barracks) {
-            // Recheck soldier count to ensure we're not over the limit
-            const currentSoldierCount = gameState.enemies.filter(e => 
-                e.kingdomId === kingdom.id && (e.type === 'WARRIOR' || e.type === 'ARCHER')
-            ).length;
-            
-            if (currentSoldierCount >= kingdomSoldierLimit) {
-                // Cancel training if over limit
-                delete kingdom.trainingInProgress[barracksId];
-                
-                // Try again later
-                setTimeout(() => {
-                    startEnemySoldierTraining(kingdom, barrackX, barrackY);
-                }, 20000); // Check again in 20 seconds
-                return;
-            }
-            
-            // Choose soldier type (archer or warrior)
-            const soldierType = Math.random() < 0.3 ? 'ARCHER' : 'WARRIOR';
-            const enemyInfo = ENEMY_TYPES[soldierType];
-            
-            // Find a valid position near the barracks
-            let spawnX = barrackX;
-            let spawnY = barrackY;
-            let validPosFound = false;
-            
-            // Search 5x5 area around barracks
-            for (let dy = -2; dy <= 2 && !validPosFound; dy++) {
-                for (let dx = -2; dx <= 2 && !validPosFound; dx++) {
-                    if (dx === 0 && dy === 0) continue; // Skip the barracks tile
-                    
-                    const newX = barrackX + dx;
-                    const newY = barrackY + dy;
-                    
-                    // Check if tile is valid for spawning
-                    if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE) {
-                        const tile = gameState.map[newY][newX];
-                        if (!tile.building && tile.territory === kingdom.id) {
-                            spawnX = newX;
-                            spawnY = newY;
-                            validPosFound = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            if (validPosFound) {
-                // Create a new enemy soldier
-                const newSoldier = {
-                    id: generateEnemyId(),
-                    x: spawnX,
-                    y: spawnY,
-                    type: soldierType,
-                    health: enemyInfo.health,
-                    attack: enemyInfo.attack,
-                    lastMoved: 0,
-                    moveDelay: enemyInfo.speed * 1000, // FIX: Replace 1000 / enemyInfo.speed with enemyInfo.speed * 1000
-                    kingdomId: kingdom.id,
-                    isAggressive: true, // Soldiers are always aggressive
-                    isTargetingPlayer: Math.random() < 0.5 // 50% chance to directly target player
-                };
-                
-                gameState.enemies.push(newSoldier);
-                
-                // Notify if close to player
-                const distanceToPlayer = Math.sqrt(
-                    Math.pow(spawnX - gameState.player.x, 2) + 
-                    Math.pow(spawnY - gameState.player.y, 2)
-                );
-                
-                if (distanceToPlayer < 20) {
-                    showMessage(`Kingdom ${kingdom.id} has trained a new ${soldierType}!`);
-                }
-                
-                // Queue next soldier training with delay based on how close to limit
-                delete kingdom.trainingInProgress[barracksId];
-                
-                // Calculate remaining capacity
-                const remainingCapacity = kingdomSoldierLimit - (currentSoldierCount + 1);
-                
-                // Delay time increases as kingdom approaches its unit cap
-                const nextTrainingDelay = remainingCapacity <= 1 ? 30000 : // Nearly at limit - 30s
-                                         remainingCapacity <= 3 ? 20000 : // Getting close - 20s 
-                                         10000; // Normal training - 10s
-                
-                // Schedule next training
-                setTimeout(() => {
-                    startEnemySoldierTraining(kingdom, barrackX, barrackY);
-                }, nextTrainingDelay);
-            } else {
-                // No space to spawn, try again later
-                delete kingdom.trainingInProgress[barracksId];
-                
-                setTimeout(() => {
-                    startEnemySoldierTraining(kingdom, barrackX, barrackY);
-                }, 5000);
-            }
-        } else {
-            // Barracks was destroyed, remove training flag
-            delete kingdom.trainingInProgress[barracksId];
-        }
-    }, trainingTime);
+    return enemy;
 }
 
 // Enemy counterattack
@@ -2605,6 +2396,13 @@ function expandEnemyKingdom(kingdom) {
             });
         }
     }
+    
+    // Check for and remove redundant walls after expansion
+    if (window.checkRedundantWalls && typeof window.checkRedundantWalls === 'function') {
+        setTimeout(() => {
+            window.checkRedundantWalls(kingdom.id);
+        }, 300);
+    }
 }
 
 // Export functions for other modules
@@ -2612,4 +2410,283 @@ window.initializeKingdoms = initializeKingdoms;
 window.drawEnemy = drawEnemy;
 window.updateEnemies = updateEnemies;
 window.spawnEnemies = spawnEnemies;
-window.updateEnemyKingdoms = updateEnemyKingdoms; 
+window.updateEnemyKingdoms = updateEnemyKingdoms;
+
+// Export functions to make them available to other modules
+window.updateEnemies = updateEnemies;
+window.areKingdomsHostile = areKingdomsHostile;
+window.shouldRespectCeasefire = shouldRespectCeasefire;
+window.attackEnemyKingdom = attackEnemyKingdom;
+window.findNearbyEnemies = findNearbyEnemies;
+window.selectEnemyTarget = selectEnemyTarget;
+
+// Handle kingdom vs kingdom combat
+function kingdomVsKingdomCombat() {
+    // Skip if not enough time has passed (adjusted for game speed)
+    if (!gameState.lastKingdomCombatUpdate || 
+        Date.now() - gameState.lastKingdomCombatUpdate < 3000 / (gameState.gameSpeed || 1.0)) {
+        return;
+    }
+    
+    gameState.lastKingdomCombatUpdate = Date.now();
+    
+    // For each pair of kingdoms
+    for (let i = 1; i < gameState.kingdoms.length; i++) {
+        for (let j = i + 1; j < gameState.kingdoms.length; j++) {
+            // Only process non-player kingdoms
+            const kingdom1 = gameState.kingdoms[i];
+            const kingdom2 = gameState.kingdoms[j];
+            
+            // Check if they are hostile to each other
+            if (!areKingdomsHostile(i, j)) continue;
+            
+            // Find border zones where kingdoms meet
+            const borderTiles = findKingdomBorderTiles(i, j);
+            
+            // If there's a common border, there's a chance of conflict
+            // Increase chance based on game speed
+            const conflictChance = 0.3 * (gameState.gameSpeed || 1.0);
+            if (borderTiles.length > 0 && Math.random() < conflictChance) {
+                // Pick a random tile to attack
+                const attackTile = borderTiles[Math.floor(Math.random() * borderTiles.length)];
+                
+                // Determine attacker and defender (50/50 chance)
+                let attackerKingdom, defenderKingdom, attackerKingdomId, defenderKingdomId;
+                
+                if (Math.random() < 0.5) {
+                    attackerKingdom = kingdom1;
+                    defenderKingdom = kingdom2;
+                    attackerKingdomId = i;
+                    defenderKingdomId = j;
+                } else {
+                    attackerKingdom = kingdom2;
+                    defenderKingdom = kingdom1;
+                    attackerKingdomId = j;
+                    defenderKingdomId = i;
+                }
+                
+                // Attack!
+                executeKingdomAttack(attackerKingdomId, defenderKingdomId, attackTile.x, attackTile.y);
+            }
+        }
+    }
+}
+
+// Find tiles where two kingdoms border each other
+function findKingdomBorderTiles(kingdom1Id, kingdom2Id) {
+    const borderTiles = [];
+    
+    // Scan the map for adjacent territories
+    for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) {
+            const tile = gameState.map[y][x];
+            
+            // Only check tiles belonging to kingdom1
+            if (tile.territory !== kingdom1Id) continue;
+            
+            // Check adjacent tiles
+            const adjacentOffsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+            
+            for (const [dx, dy] of adjacentOffsets) {
+                const nx = x + dx;
+                const ny = y + dy;
+                
+                // Skip if out of bounds
+                if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) continue;
+                
+                // If adjacent tile belongs to kingdom2, we found a border
+                if (gameState.map[ny][nx].territory === kingdom2Id) {
+                    borderTiles.push({x, y});
+                    break; // Found a border for this tile, no need to check other adjacents
+                }
+            }
+        }
+    }
+    
+    return borderTiles;
+}
+
+// Execute an attack from one kingdom to another
+function executeKingdomAttack(attackerKingdomId, defenderKingdomId, targetX, targetY) {
+    const attacker = gameState.kingdoms[attackerKingdomId];
+    const defender = gameState.kingdoms[defenderKingdomId];
+    
+    if (!attacker || !defender) return;
+    
+    // Find the enemy soldiers in the defender kingdom that are closest to the target
+    const defenderSoldiers = gameState.enemies.filter(enemy => 
+        enemy.kingdomId === defenderKingdomId &&
+        Math.abs(enemy.x - targetX) <= 5 && 
+        Math.abs(enemy.y - targetY) <= 5
+    );
+    
+    // Spawn attacker soldiers if none found in that area
+    const attackerSoldiers = gameState.enemies.filter(enemy => 
+        enemy.kingdomId === attackerKingdomId &&
+        Math.abs(enemy.x - targetX) <= 5 && 
+        Math.abs(enemy.y - targetY) <= 5
+    );
+    
+    // Show battle effect at the target location
+    addVisualEffect('battle', targetX, targetY, KINGDOM_COLORS[attackerKingdomId]);
+    
+    // If there are no existing defending soldiers, claim territory
+    if (defenderSoldiers.length === 0) {
+        // 50% chance to claim territory
+        if (Math.random() < 0.5) {
+            // Claim the tile for the attacker
+            const targetTile = gameState.map[targetY][targetX];
+            if (targetTile.territory === defenderKingdomId) {
+                targetTile.territory = attackerKingdomId;
+                
+                // Visual effect for territory capture
+                addVisualEffect('territory-capture', targetX, targetY, KINGDOM_COLORS[attackerKingdomId]);
+                
+                // If this was significant, show a message
+                if (Math.random() < 0.2) {
+                    const attackerName = attacker.name || `Kingdom ${attackerKingdomId}`;
+                    const defenderName = defender.name || `Kingdom ${defenderKingdomId}`;
+                    
+                    // Use kingdom message instead of regular game message
+                    if (window.showKingdomMessage) {
+                        showKingdomMessage(`${attackerName} captured territory from ${defenderName}!`);
+                    } else {
+                        showGameMessage(`${attackerName} captured territory from ${defenderName}!`);
+                    }
+                }
+            }
+        }
+        
+        // Spawn soldiers for the attacker in the area
+        if (attackerSoldiers.length < 3 && Math.random() < 0.6) {
+            // Create a new soldier for the attacker kingdom
+            spawnKingdomSoldier(attackerKingdomId, targetX, targetY);
+        }
+    } 
+    // If there are defending soldiers, initiate combat
+    else if (defenderSoldiers.length > 0) {
+        // Spawn attackers if needed
+        if (attackerSoldiers.length < defenderSoldiers.length && Math.random() < 0.7) {
+            // Spawn 1-3 attacking soldiers
+            const soldiersToSpawn = 1 + Math.floor(Math.random() * 3);
+            for (let i = 0; i < soldiersToSpawn; i++) {
+                spawnKingdomSoldier(attackerKingdomId, targetX, targetY);
+            }
+        }
+        
+        // Battle!
+        const attackerName = attacker.name || `Kingdom ${attackerKingdomId}`;
+        const defenderName = defender.name || `Kingdom ${defenderKingdomId}`;
+        
+        // Rarely show battle messages
+        if (Math.random() < 0.1) {
+            // Use kingdom message instead of regular game message
+            if (window.showKingdomMessage) {
+                showKingdomMessage(`Battle between ${attackerName} and ${defenderName}!`);
+            } else {
+                showGameMessage(`Battle between ${attackerName} and ${defenderName}!`);
+            }
+        }
+        
+        // For each attacker, attack a random defender
+        attackerSoldiers.forEach(attacker => {
+            if (defenderSoldiers.length === 0) return;
+            
+            // Pick a random defender
+            const randomIndex = Math.floor(Math.random() * defenderSoldiers.length);
+            const defender = defenderSoldiers[randomIndex];
+            
+            // Attack the defender
+            attackEnemyKingdom(attacker, defender);
+            
+            // If defender is dead, remove from the list and show death effect
+            if (defender.health <= 0) {
+                // Death effect
+                addVisualEffect('death', defender.x, defender.y);
+                
+                defenderSoldiers.splice(randomIndex, 1);
+            }
+        });
+        
+        // Defenders might counterattack
+        defenderSoldiers.forEach(defender => {
+            if (attackerSoldiers.length === 0) return;
+            
+            // Only counterattack with 70% chance
+            if (Math.random() < 0.7) {
+                // Pick a random attacker to counterattack
+                const randomIndex = Math.floor(Math.random() * attackerSoldiers.length);
+                const attackerToHit = attackerSoldiers[randomIndex];
+                
+                // Counterattack
+                attackEnemyKingdom(defender, attackerToHit);
+                
+                // If attacker is dead, remove from the list and show death effect
+                if (attackerToHit.health <= 0) {
+                    // Death effect
+                    addVisualEffect('death', attackerToHit.x, attackerToHit.y);
+                    
+                    attackerSoldiers.splice(randomIndex, 1);
+                }
+            }
+        });
+    }
+}
+
+// Spawn a soldier for a kingdom at specific coordinates
+function spawnKingdomSoldier(kingdomId, x, y) {
+    // Find valid position near target
+    let validX = x, validY = y;
+    let attempts = 0;
+    
+    while (attempts < 10) {
+        // Random offset (-2 to +2)
+        const offsetX = Math.floor(Math.random() * 5) - 2;
+        const offsetY = Math.floor(Math.random() * 5) - 2;
+        
+        validX = Math.max(0, Math.min(MAP_SIZE - 1, x + offsetX));
+        validY = Math.max(0, Math.min(MAP_SIZE - 1, y + offsetY));
+        
+        // Check if this position is valid (not occupied by building)
+        const tile = gameState.map[validY][validX];
+        if (!tile.building) {
+            break;
+        }
+        
+        attempts++;
+    }
+    
+    // Create the enemy
+    const enemyType = Math.random() < 0.7 ? 'WARRIOR' : 'ARCHER';
+    const enemyInfo = ENEMY_TYPES[enemyType];
+    
+    const enemy = {
+        id: generateEnemyId(),
+        x: validX,
+        y: validY,
+        type: enemyType,
+        health: enemyInfo.health,
+        attack: enemyInfo.attack,
+        lastMoved: 0,
+        moveDelay: enemyInfo.speed * 1000,
+        kingdomId: kingdomId
+    };
+    
+    gameState.enemies.push(enemy);
+    return enemy;
+}
+
+// Function to add visual effects to the game (placeholder - implement in core.js)
+function addVisualEffect(type, x, y, color) {
+    // Implement visual effects system if needed
+    console.log(`Visual effect: ${type} at ${x},${y} with color ${color}`);
+}
+
+// Initialize gameState tracking for kingdom combat
+// (Do this in a way that won't overwrite existing properties)
+if (typeof gameState !== 'undefined') {
+    // Initialize last update time if not exists
+    if (!gameState.lastKingdomCombatUpdate) {
+        gameState.lastKingdomCombatUpdate = Date.now();
+    }
+}

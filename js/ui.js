@@ -155,31 +155,44 @@ function updateResourceUI() {
 }
 
 // Show a message to the player
-function showMessage(message) {
-    // Translate the message
-    const translatedMessage = translate(message);
+function showMessage(message, messageType = 'personal') {
+    // Bu fonksiyonu doğrudan çağırmak yerine window.showMessage kullanın
+    // Bu fonksiyon, window.showMessage global olarak tanımlandıktan sonra
+    // potansiyel sonsuz döngüler oluşturabilir
     
-    // Get message element
-    const messageEl = document.getElementById('game-message');
+    // Geriye uyumluluk için burada debug log yazıp sessizce devam edelim
+    console.log("Legacy showMessage called:", message);
     
-    // Set message text
-    messageEl.textContent = translatedMessage;
-    
-    // Add highlight animation class
-    messageEl.classList.add('message-highlight');
-    
-    // Remove highlight after animation completes
-    setTimeout(() => {
-        messageEl.classList.remove('message-highlight');
-    }, 3000);
-    
-    // Log message for debugging
-    console.log("Message shown:", message, "Translated:", translatedMessage);
+    // Düzgün şekilde çağırıldığında bu fonksiyon kullanılmaz
+}
+
+// Show a kingdom message (for kingdom-related events)
+function showKingdomMessage(message) {
+    // window.showMessage çağrısı yapalım
+    if (window.showKingdomNotification) {
+        window.showKingdomNotification(message);
+    } else if (window.showMessage) {
+        window.showMessage(message, 'kingdom');
+    }
+}
+
+// Show a personal message (for player-related events)
+function showPersonalMessage(message) {
+    // window.showMessage çağrısı yapalım
+    if (window.showPersonalNotification) {
+        window.showPersonalNotification(message);
+    } else if (window.showMessage) {
+        window.showMessage(message, 'personal');
+    }
 }
 
 // Alias for diplomacy.js and other modules that use showGameMessage
-function showGameMessage(message) {
-    showMessage(message);
+function showGameMessage(message, messageType = 'personal') {
+    if (messageType === 'kingdom') {
+        showKingdomMessage(message);
+    } else {
+        showPersonalMessage(message);
+    }
 }
 
 // Update button text based on screen size
@@ -1049,6 +1062,8 @@ function saveGameWithName(saveName) {
             } : null,
             currentAge: gameState.currentAge,
             gameTime: gameState.gameTime,
+            // Save game speed
+            gameSpeed: gameState.gameSpeed || 1.0,
             timestamp: Date.now(),
             population: {
                 current: gameState.population.current,
@@ -1410,6 +1425,57 @@ function loadGameFromData(saveData) {
             gameState.gameTime = 0;
         }
         
+        // Load game speed with validation
+        try {
+            if (typeof saveData.gameSpeed === 'number') {
+                gameState.gameSpeed = saveData.gameSpeed;
+                
+                // Update speed buttons UI
+                const slowSpeedBtn = document.getElementById('slow-speed-btn');
+                const normalSpeedBtn = document.getElementById('normal-speed-btn');
+                const fastSpeedBtn = document.getElementById('fast-speed-btn');
+                const speedValueDisplay = document.getElementById('speed-value');
+                
+                if (slowSpeedBtn && normalSpeedBtn && fastSpeedBtn) {
+                    // Reset all buttons
+                    slowSpeedBtn.classList.remove('active');
+                    normalSpeedBtn.classList.remove('active');
+                    fastSpeedBtn.classList.remove('active');
+                    
+                    // Set the active button based on saved speed
+                    if (gameState.gameSpeed <= 0.5) {
+                        slowSpeedBtn.classList.add('active');
+                    } else if (gameState.gameSpeed >= 1.5) {
+                        fastSpeedBtn.classList.add('active');
+                    } else {
+                        normalSpeedBtn.classList.add('active');
+                    }
+                }
+                
+                // Update speed display
+                if (speedValueDisplay) {
+                    speedValueDisplay.textContent = gameState.gameSpeed + 'x';
+                }
+            } else {
+                // Default to normal speed
+                gameState.gameSpeed = 1.0;
+                
+                const normalSpeedBtn = document.getElementById('normal-speed-btn');
+                if (normalSpeedBtn) {
+                    normalSpeedBtn.classList.add('active');
+                }
+                
+                // Reset speed display
+                const speedValueDisplay = document.getElementById('speed-value');
+                if (speedValueDisplay) {
+                    speedValueDisplay.textContent = '1x';
+                }
+            }
+        } catch (speedError) {
+            console.error("Error loading game speed:", speedError);
+            gameState.gameSpeed = 1.0; // Default to normal speed
+        }
+        
         console.log("Updating UI...");
         // Update UI
         try {
@@ -1704,39 +1770,44 @@ window.loadGame = loadGame;
 window.createBuilding = createBuilding;
 window.createEnemy = createEnemy;
 
-// Ekonomi UI'daki altın değerini güncelleme işlemini düzelt (gold-amount elementinde HTML parsing sorunu var)
-function updateEconomyGoldDisplay() {
-    try {
-        const goldAmountElement = document.getElementById('gold-amount');
-        if (goldAmountElement) {
-            // HTML kodu ekleme yerine iki element olarak ayır ve temiz şekilde ekle
-            goldAmountElement.innerHTML = ''; // İçeriği temizle
-            
-            // Altın miktarı metni
-            const goldText = document.createElement('span');
-            goldText.textContent = Math.floor(gameState.economy.gold);
-            goldAmountElement.appendChild(goldText);
-            
-            // Altın ikonu
-            const goldIcon = document.createElement('i');
-            goldIcon.className = 'fas fa-coins gold-icon';
-            goldAmountElement.appendChild(goldIcon);
-        }
-    } catch (error) {
-        console.error("Altın göstergesini güncellerken hata:", error);
-    }
-}
-
-// showMessage fonksiyonunu yerel bir değişkenle güncelleyelim, çünkü bu bütün UI'ı güncelleme şansını veriyor
+// Check for showMessage override in main.js or other files
+// showMessage fonksiyonunu global scope'a ekleyelim
 const originalShowMessage = window.showMessage;
-window.showMessage = function(message) {
-    // Orijinal fonksiyonu çağır
-    originalShowMessage(message);
+window.showMessage = function(message, messageType = 'personal') {
+    // Sonsuz döngüyü önleme: Orijinal fonksiyonu çağırırken showMessage'i tekrar çağırıyordu
+    // UI.js'deki fonksiyonu doğrudan çağıralım
     
-    // Ekonomi paneli açıksa altın değerini güncelle
-    const economyPanel = document.getElementById('economy-panel');
-    if (economyPanel && economyPanel.classList.contains('show')) {
-        updateEconomyGoldDisplay();
+    // Translate the message
+    const translatedMessage = translate(message);
+    
+    // Get message element based on type
+    const messageEl = document.querySelector(
+        messageType === 'kingdom' 
+        ? '#kingdom-message .message-content' 
+        : '#personal-message .message-content'
+    );
+    
+    // Get the parent section for animation
+    const sectionEl = messageType === 'kingdom' 
+        ? document.getElementById('kingdom-message')
+        : document.getElementById('personal-message');
+    
+    // Set message text
+    if (messageEl) {
+        messageEl.textContent = translatedMessage;
+        
+        // Add highlight animation class to the section
+        sectionEl.classList.add('message-highlight');
+        
+        // Remove highlight after animation completes
+        setTimeout(() => {
+            sectionEl.classList.remove('message-highlight');
+        }, 3000);
+        
+        // Log message for debugging
+        console.log(`${messageType} message shown:`, message, "Translated:", translatedMessage);
+    } else {
+        console.error("Message element not found for type:", messageType);
     }
 };
 
@@ -1784,4 +1855,27 @@ window.addEventListener('load', function() {
     document.querySelectorAll('.side-panel').forEach(panel => {
         setupTouchScrolling(panel);
     });
-}); 
+});
+
+// Ekonomi UI'daki altın değerini güncelleme işlemini düzelt (gold-amount elementinde HTML parsing sorunu var)
+function updateEconomyGoldDisplay() {
+    try {
+        const goldAmountElement = document.getElementById('gold-amount');
+        if (goldAmountElement) {
+            // HTML kodu ekleme yerine iki element olarak ayır ve temiz şekilde ekle
+            goldAmountElement.innerHTML = ''; // İçeriği temizle
+            
+            // Altın miktarı metni
+            const goldText = document.createElement('span');
+            goldText.textContent = Math.floor(gameState.economy.gold);
+            goldAmountElement.appendChild(goldText);
+            
+            // Altın ikonu
+            const goldIcon = document.createElement('i');
+            goldIcon.className = 'fas fa-coins gold-icon';
+            goldAmountElement.appendChild(goldIcon);
+        }
+    } catch (error) {
+        console.error("Altın göstergesini güncellerken hata:", error);
+    }
+} 

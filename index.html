@@ -119,6 +119,23 @@
                 </div>
             </div>
             
+            <!-- Add game speed controls -->
+            <div class="top-bar-section game-speed-controls">
+                <div class="speed-indicator">
+                    <i class="material-icons-round">speed</i>
+                    <span id="speed-value">1x</span>
+                </div>
+                <button id="slow-speed-btn" class="speed-button">
+                    <i class="material-icons-round">slow_motion_video</i>
+                </button>
+                <button id="normal-speed-btn" class="speed-button active">
+                    <i class="material-icons-round">play_arrow</i>
+                </button>
+                <button id="fast-speed-btn" class="speed-button">
+                    <i class="material-icons-round">fast_forward</i>
+                </button>
+            </div>
+            
             <div class="top-bar-section">
                 <button id="economy-button" class="nav-button">
                     <i class="material-icons-round">account_balance</i>
@@ -463,7 +480,20 @@
                 </div>
                 
                 <!-- Game Message (Notifications) -->
-                <div id="game-message">Enemy attacks WALL! (130 HP remaining)</div>
+                <div id="game-message-container">
+                    <div id="kingdom-message" class="message-section">
+                        <div class="message-icon">
+                            <i class="material-icons-round">public</i>
+                        </div>
+                        <div class="message-content">Kingdom events will show here</div>
+                    </div>
+                    <div id="personal-message" class="message-section">
+                        <div class="message-icon">
+                            <i class="material-icons-round">person</i>
+                        </div>
+                        <div class="message-content">Personal events will show here</div>
+                    </div>
+                </div>
             </div>
             
             <!-- Right Section - Action Buttons -->

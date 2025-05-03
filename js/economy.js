@@ -570,6 +570,11 @@ const economySystem = {
     },
     
     checkForTraderVisits(currentTime) {
+        // Ensure traderVisits array exists
+        if (!gameState.economy.traderVisits) {
+            gameState.economy.traderVisits = [];
+        }
+        
         this.marketTraders.forEach(trader => {
             // Check if it's time for trader to visit
             if (currentTime - trader.lastVisit >= trader.visitInterval) {

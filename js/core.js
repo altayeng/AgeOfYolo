@@ -671,7 +671,8 @@ const gameState = {
     gameYear: 0,
     lastTick: 0,
     kingdomExpansionCooldown: 0, // Cooldown for kingdom expansion
-    lastKingdomUpdate: 0 // Last time kingdoms were updated
+    lastKingdomUpdate: 0, // Last time kingdoms were updated
+    gameSpeed: 1.0 // Added game speed setting
 };
 
 // Age progression
@@ -1116,7 +1117,52 @@ function setupEventListeners() {
         }
     });
     
-    // Window resize handler
+    // Speed controls event listeners
+    const slowSpeedBtn = document.getElementById('slow-speed-btn');
+    const normalSpeedBtn = document.getElementById('normal-speed-btn');
+    const fastSpeedBtn = document.getElementById('fast-speed-btn');
+    const speedValueDisplay = document.getElementById('speed-value');
+    
+    slowSpeedBtn.addEventListener('click', () => {
+        gameState.gameSpeed = 0.5;
+        updateSpeedButtonStates(slowSpeedBtn);
+        updateSpeedDisplay();
+    });
+    
+    normalSpeedBtn.addEventListener('click', () => {
+        gameState.gameSpeed = 1.0;
+        updateSpeedButtonStates(normalSpeedBtn);
+        updateSpeedDisplay();
+    });
+    
+    fastSpeedBtn.addEventListener('click', () => {
+        gameState.gameSpeed = 4.0; // 4x hız
+        updateSpeedButtonStates(fastSpeedBtn);
+        updateSpeedDisplay();
+    });
+    
+    // Function to update button states
+    function updateSpeedButtonStates(activeButton) {
+        // Remove active class from all buttons
+        slowSpeedBtn.classList.remove('active');
+        normalSpeedBtn.classList.remove('active');
+        fastSpeedBtn.classList.remove('active');
+        
+        // Add active class to the clicked button
+        activeButton.classList.add('active');
+    }
+    
+    // Function to update speed display
+    function updateSpeedDisplay() {
+        if (speedValueDisplay) {
+            speedValueDisplay.textContent = gameState.gameSpeed + 'x';
+        }
+    }
+    
+    // Initialize speed display
+    updateSpeedDisplay();
+    
+    // Window resize event
     window.addEventListener('resize', () => {
         resizeCanvases();
         updateButtonTexts(window.innerWidth);
@@ -1153,8 +1199,11 @@ function gameLoop(timestamp) {
 
 // Update game state
 function updateGameState(deltaTime) {
+    // Apply game speed multiplier to deltaTime
+    const adjustedDeltaTime = deltaTime * (gameState.gameSpeed || 1.0);
+    
     // Increment game year (1 year every 500ms)
-    gameState.gameYear += deltaTime / 500;
+    gameState.gameYear += adjustedDeltaTime / 500;
     
     // Update UI
     document.getElementById('game-time').textContent = `Year: ${Math.floor(gameState.gameYear)}`;
@@ -1163,7 +1212,7 @@ function updateGameState(deltaTime) {
     if (gameState.buildingAnimations.length > 0) {
         for (let i = gameState.buildingAnimations.length - 1; i >= 0; i--) {
             const anim = gameState.buildingAnimations[i];
-            anim.progress += (deltaTime / (BUILDING_TYPES[anim.type].buildTime * 1000)) * 100;
+            anim.progress += (adjustedDeltaTime / (BUILDING_TYPES[anim.type].buildTime * 1000)) * 100;
             
             if (anim.progress >= 100) {
                 gameState.buildingAnimations.splice(i, 1);
@@ -1172,17 +1221,17 @@ function updateGameState(deltaTime) {
     }
     
     // Update soldier training
-    updateSoldierTraining(deltaTime);
+    updateSoldierTraining(adjustedDeltaTime);
     
     // Update enemies
-    updateEnemies(deltaTime);
+    updateEnemies(adjustedDeltaTime);
     
     // Update enemy kingdoms (gathering resources, building, expanding)
-    updateEnemyKingdoms(deltaTime);
+    updateEnemyKingdoms(adjustedDeltaTime);
     
     // Decrease combat cooldown if active
     if (gameState.combatCooldown > 0) {
-        gameState.combatCooldown = Math.max(0, gameState.combatCooldown - deltaTime);
+        gameState.combatCooldown = Math.max(0, gameState.combatCooldown - adjustedDeltaTime);
     }
     
     // Update soldier positions
@@ -1193,8 +1242,8 @@ function updateGameState(deltaTime) {
     updateMilitaryUI();
     
     // Update Economy System
-                if (economySystem) {
-        economySystem.update(deltaTime);
+    if (economySystem) {
+        economySystem.update(adjustedDeltaTime);
     }
 }
 
@@ -1577,6 +1626,26 @@ function resetGameState() {
         soldiers: 0
     };
     
+    // Reset game speed to normal
+    gameState.gameSpeed = 1.0;
+    
+    // Reset UI for game speed buttons
+    const slowSpeedBtn = document.getElementById('slow-speed-btn');
+    const normalSpeedBtn = document.getElementById('normal-speed-btn');
+    const fastSpeedBtn = document.getElementById('fast-speed-btn');
+    const speedValueDisplay = document.getElementById('speed-value');
+    
+    if (slowSpeedBtn && normalSpeedBtn && fastSpeedBtn) {
+        slowSpeedBtn.classList.remove('active');
+        normalSpeedBtn.classList.add('active');
+        fastSpeedBtn.classList.remove('active');
+    }
+    
+    // Update speed display
+    if (speedValueDisplay) {
+        speedValueDisplay.textContent = '1x';
+    }
+    
     // Reset military stats
     gameState.military = {
         attack: 10,          // Base attack power
@@ -1645,3 +1714,209 @@ window.gameState = gameState;
 window.gameLoop = gameLoop;
 window.updateGameState = updateGameState;
 window.resetGameState = resetGameState;
+
+// Visual Effects System
+const visualEffects = [];
+
+// Define effect types
+const EFFECT_TYPES = {
+    'territory-capture': {
+        duration: 1500,
+        render: function(effect, progress) {
+            // Expanding circle effect for territory capture
+            const size = Math.min(30, 30 * progress);
+            const alpha = Math.max(0, 1 - progress);
+            
+            gameCtx.save();
+            gameCtx.globalAlpha = alpha;
+            gameCtx.fillStyle = effect.color || '#ffffff';
+            gameCtx.beginPath();
+            gameCtx.arc(
+                effect.x * TILE_SIZE + TILE_SIZE / 2, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2, 
+                size, 0, Math.PI * 2
+            );
+            gameCtx.fill();
+            
+            // Flag effect
+            const flagHeight = Math.min(20, 20 * progress);
+            const flagX = effect.x * TILE_SIZE + TILE_SIZE / 2;
+            const flagY = effect.y * TILE_SIZE + TILE_SIZE / 2 - flagHeight;
+            
+            gameCtx.strokeStyle = '#000000';
+            gameCtx.lineWidth = 2;
+            gameCtx.beginPath();
+            gameCtx.moveTo(flagX, flagY + flagHeight);
+            gameCtx.lineTo(flagX, flagY);
+            gameCtx.stroke();
+            
+            gameCtx.fillStyle = effect.color || '#ffffff';
+            gameCtx.fillRect(flagX, flagY, 10, 6);
+            
+            gameCtx.restore();
+        }
+    },
+    'battle': {
+        duration: 2000,
+        render: function(effect, progress) {
+            // Crossed swords effect for battle
+            const size = Math.min(20, 20 * (1 - progress));
+            const alpha = Math.max(0, 1 - progress);
+            const rotation = progress * Math.PI * 4; // Rotate during animation
+            
+            gameCtx.save();
+            gameCtx.globalAlpha = alpha;
+            gameCtx.translate(
+                effect.x * TILE_SIZE + TILE_SIZE / 2, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2
+            );
+            gameCtx.rotate(rotation);
+            
+            // First sword
+            gameCtx.strokeStyle = '#ff0000';
+            gameCtx.lineWidth = 3;
+            gameCtx.beginPath();
+            gameCtx.moveTo(-size, -size);
+            gameCtx.lineTo(size, size);
+            gameCtx.stroke();
+            
+            // Second sword
+            gameCtx.beginPath();
+            gameCtx.moveTo(-size, size);
+            gameCtx.lineTo(size, -size);
+            gameCtx.stroke();
+            
+            // Handle
+            gameCtx.fillStyle = '#aa8866';
+            gameCtx.fillRect(-size - 3, -size - 3, 6, 6);
+            gameCtx.fillRect(size - 3, size - 3, 6, 6);
+            
+            gameCtx.restore();
+        }
+    },
+    'death': {
+        duration: 1000,
+        render: function(effect, progress) {
+            // Skull effect for death
+            const size = Math.min(15, 15 * (1 - progress));
+            const alpha = Math.max(0, 1 - progress);
+            
+            gameCtx.save();
+            gameCtx.globalAlpha = alpha;
+            
+            // Skull shape
+            gameCtx.fillStyle = '#ffffff';
+            gameCtx.beginPath();
+            gameCtx.arc(
+                effect.x * TILE_SIZE + TILE_SIZE / 2, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2, 
+                size, 0, Math.PI * 2
+            );
+            gameCtx.fill();
+            
+            // Eye sockets and teeth details
+            gameCtx.fillStyle = '#000000';
+            gameCtx.beginPath();
+            gameCtx.arc(
+                effect.x * TILE_SIZE + TILE_SIZE / 2 - size/3, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2 - size/4, 
+                size/4, 0, Math.PI * 2
+            );
+            gameCtx.arc(
+                effect.x * TILE_SIZE + TILE_SIZE / 2 + size/3, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2 - size/4, 
+                size/4, 0, Math.PI * 2
+            );
+            gameCtx.fill();
+            
+            // Jaw
+            gameCtx.strokeStyle = '#000000';
+            gameCtx.lineWidth = 2;
+            gameCtx.beginPath();
+            gameCtx.moveTo(
+                effect.x * TILE_SIZE + TILE_SIZE / 2 - size/2, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2 + size/4
+            );
+            gameCtx.quadraticCurveTo(
+                effect.x * TILE_SIZE + TILE_SIZE / 2, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2 + size/2,
+                effect.x * TILE_SIZE + TILE_SIZE / 2 + size/2, 
+                effect.y * TILE_SIZE + TILE_SIZE / 2 + size/4
+            );
+            gameCtx.stroke();
+            
+            gameCtx.restore();
+        }
+    }
+};
+
+// Add a visual effect to the game
+function addVisualEffect(type, x, y, color) {
+    // Check if effect type exists
+    if (!EFFECT_TYPES[type]) {
+        console.warn(`Unknown visual effect type: ${type}`);
+        return;
+    }
+    
+    // Create the effect
+    const effect = {
+        type: type,
+        x: x,
+        y: y,
+        color: color || '#ffffff',
+        startTime: Date.now(),
+        duration: EFFECT_TYPES[type].duration
+    };
+    
+    // Add to effects array
+    visualEffects.push(effect);
+    
+    return effect;
+}
+
+// Update and render visual effects
+function updateVisualEffects() {
+    const currentTime = Date.now();
+    
+    // Remove expired effects
+    for (let i = visualEffects.length - 1; i >= 0; i--) {
+        const effect = visualEffects[i];
+        const elapsedTime = currentTime - effect.startTime;
+        
+        if (elapsedTime >= effect.duration) {
+            visualEffects.splice(i, 1);
+        }
+    }
+}
+
+function renderVisualEffects() {
+    const currentTime = Date.now();
+    
+    visualEffects.forEach(effect => {
+        const elapsedTime = currentTime - effect.startTime;
+        const progress = Math.min(1.0, elapsedTime / effect.duration);
+        
+        // Get the renderer for this effect type
+        const effectType = EFFECT_TYPES[effect.type];
+        if (effectType && typeof effectType.render === 'function') {
+            effectType.render(effect, progress);
+        }
+    });
+}
+
+// Update game loop to include visual effects
+// (Assuming there's a main render function we can hook into)
+const originalGameLoop = gameLoop;
+window.gameLoop = function(timestamp) {
+    // Call original game loop
+    originalGameLoop(timestamp);
+    
+    // Update and render visual effects
+    updateVisualEffects();
+    renderVisualEffects();
+};
+
+// Expose the functions globally
+window.addVisualEffect = addVisualEffect;
+window.updateVisualEffects = updateVisualEffects;
+window.renderVisualEffects = renderVisualEffects;

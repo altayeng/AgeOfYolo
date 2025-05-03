@@ -558,10 +558,15 @@ function buildWall() {
             removeInteriorWalls(0);
         }
         
-        // Check for and remove redundant walls
-        checkRedundantWalls(0);
+        // Check for and remove redundant walls after a small delay
+        // This helps ensure proper rendering and avoids confusing the player
+        setTimeout(() => {
+            checkRedundantWalls(0);
+            // Update UI again after removing redundant walls
+            updateUI();
+        }, 300);
         
-        showMessage('Wall built successfully!');
+        showMessage('Duvar başarıyla inşa edildi!');
         
         // Play build sound
         const buildSound = new Audio('data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgA');
@@ -883,12 +888,9 @@ function expandTerritoryWithinWalls(kingdomId) {
 
 // Check if a wall has become redundant after a new wall is built
 function checkRedundantWalls(kingdomId) {
-    // For now, disable automatic wall removal as it's causing issues
-    // We'll wait for user feedback on this feature
-    return false;
-    
-    /* Commented out until we have a more robust solution
+    // Re-enable the wall removal functionality
     const kingdom = gameState.kingdoms[kingdomId];
+    if (!kingdom) return false;
     
     // Get all wall coordinates
     const wallCoords = new Set();
@@ -906,110 +908,94 @@ function checkRedundantWalls(kingdomId) {
         }
     }
     
-    // Identify redundant walls
+    // Identify redundant walls - focusing on walls that have territory on both sides
     const redundantWalls = [];
     
-    // Use flood fill to identify walls that are completely surrounded by walls or territory
-    // and are not essential for keeping territory enclosed
+    // Define directions for neighbor checking
+    const directions = [
+        {dx: 1, dy: 0}, {dx: -1, dy: 0}, {dx: 0, dy: 1}, {dx: 0, dy: -1}
+    ];
+    
     for (const wall of kingdom.wallPerimeter) {
-        // Skip walls that were recently built (in the last 3 seconds)
-        const wallBuilding = gameState.buildings.find(b => 
-            b.x === wall.x && b.y === wall.y && b.type === 'WALL');
-            
-        if (wallBuilding && Date.now() - wallBuilding.id < 3000) {
-            continue;
-        }
-        
-        // First check: wall must be completely surrounded by walls or territory
-        let isCompleteSurround = true;
-        const directions = [
-            {dx: 1, dy: 0}, {dx: -1, dy: 0}, {dx: 0, dy: 1}, {dx: 0, dy: -1},
-            {dx: 1, dy: 1}, {dx: -1, dy: 1}, {dx: 1, dy: -1}, {dx: -1, dy: -1}
-        ];
+        // Count territories on each side
+        let territoriesAround = 0;
+        let wallsAround = 0;
         
         for (const {dx, dy} of directions) {
             const nx = wall.x + dx;
             const ny = wall.y + dy;
             
-            // If out of bounds, not completely surrounded
+            // Skip if out of bounds
             if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) {
-                isCompleteSurround = false;
-                break;
+                continue;
             }
             
-            const key = `${nx},${ny}`;
+            // Check if this tile belongs to the same kingdom
+            if (gameState.map[ny][nx].territory === kingdomId) {
+                territoriesAround++;
+            }
             
-            // If the adjacent tile is not a wall and not territory, not surrounded
-            if (!wallCoords.has(key) && !territoryCoords.has(key)) {
-                isCompleteSurround = false;
-                break;
+            // Check if this tile is another wall of the same kingdom
+            if (gameState.map[ny][nx].isWall && gameState.map[ny][nx].territory === kingdomId) {
+                wallsAround++;
             }
         }
         
-        if (!isCompleteSurround) {
-            continue; // Not completely surrounded, so not redundant
-        }
-        
-        // Second check: wall must not be essential for keeping territory enclosed
-        // Temporarily remove the wall from consideration
-        const wallKey = `${wall.x},${wall.y}`;
-        wallCoords.delete(wallKey);
-        
-        // Check if removing this wall would expose any territory
-        let isEssential = false;
-        
-        // Check territory tiles adjacent to this wall
-        for (const {dx, dy} of directions) {
-            const nx = wall.x + dx;
-            const ny = wall.y + dy;
+        // Wall is likely redundant if surrounded by kingdom territory or other walls
+        if (territoriesAround >= 2 || (territoriesAround >= 1 && wallsAround >= 2)) {
+            // Additional check: make sure this wall isn't on the outer perimeter
+            // A wall is on the outer perimeter if it has at least one non-kingdom tile adjacent
+            let isOuterPerimeter = false;
             
-            if (nx >= 0 && nx < MAP_SIZE && ny >= 0 && ny < MAP_SIZE) {
-                const adjacentKey = `${nx},${ny}`;
+            for (const {dx, dy} of directions) {
+                const nx = wall.x + dx;
+                const ny = wall.y + dy;
                 
-                // If this is a territory tile (not a wall)
-                if (territoryCoords.has(adjacentKey) && !wallCoords.has(adjacentKey)) {
-                    // Check if removing the wall would expose this territory tile
-                    // A territory tile is exposed if it has a non-wall, non-territory neighbor
-                    for (const {dx: dx2, dy: dy2} of directions) {
-                        const nx2 = nx + dx2;
-                        const ny2 = ny + dy2;
-                        
-                        if (nx2 >= 0 && nx2 < MAP_SIZE && ny2 >= 0 && ny2 < MAP_SIZE) {
-                            const neighborKey = `${nx2},${ny2}`;
-                            
-                            // If this neighbor is neither a wall nor territory
-                            if (!wallCoords.has(neighborKey) && !territoryCoords.has(neighborKey)) {
-                                isEssential = true;
-                                break;
-                            }
-                        }
-                    }
-                    
-                    if (isEssential) break;
+                // Skip if out of bounds
+                if (nx < 0 || nx >= MAP_SIZE || ny < 0 || ny >= MAP_SIZE) {
+                    isOuterPerimeter = true;
+                    break;
+                }
+                
+                // If adjacent tile is not kingdom's territory or wall, this is outer perimeter
+                if (gameState.map[ny][nx].territory !== kingdomId && !gameState.map[ny][nx].isWall) {
+                    isOuterPerimeter = true;
+                    break;
                 }
             }
-        }
-        
-        // Put the wall back in the set
-        wallCoords.add(wallKey);
-        
-        // If the wall is not essential, mark it as redundant
-        if (!isEssential) {
-            redundantWalls.push(wall);
+            
+            // Only mark as redundant if not on outer perimeter
+            if (!isOuterPerimeter) {
+                redundantWalls.push(wall);
+            }
         }
     }
     
     // Limit the number of walls we remove at once to prevent large changes
-    const wallsToRemove = redundantWalls.slice(0, 1);
+    const wallsToRemove = redundantWalls.slice(0, 5); // Allow removing up to 5 walls at once
     
     // Remove redundant walls
     for (const wall of wallsToRemove) {
-        // Find the wall in buildings list
-        const wallBuildingIndex = gameState.buildings.findIndex(b => 
-            b.x === wall.x && b.y === wall.y && b.type === 'WALL');
+        if (kingdomId === 0) {
+            // For player walls, remove from buildings array
+            const wallBuildingIndex = gameState.buildings.findIndex(b => 
+                b.x === wall.x && b.y === wall.y && b.type === 'WALL');
+                
+            if (wallBuildingIndex !== -1) {
+                gameState.buildings.splice(wallBuildingIndex, 1);
+            }
             
-        if (wallBuildingIndex !== -1) {
-            gameState.buildings.splice(wallBuildingIndex, 1);
+            // Give back some resources (half the cost) to player only
+            gameState.resources.wood += Math.floor(BUILDING_TYPES.WALL.woodCost / 2);
+            gameState.resources.stone += Math.floor(BUILDING_TYPES.WALL.stoneCost / 2);
+        } else {
+            // For enemy walls, remove from enemyBuildings
+            const wallBuildingIndex = gameState.enemyBuildings.findIndex(b => 
+                b.x === wall.x && b.y === wall.y && b.type === 'WALL' && b.kingdomId === kingdomId);
+                
+            if (wallBuildingIndex !== -1) {
+                gameState.enemyBuildings.splice(wallBuildingIndex, 1);
+            }
         }
         
         // Remove from map
@@ -1022,19 +1008,18 @@ function checkRedundantWalls(kingdomId) {
         if (wallIndex !== -1) {
             kingdom.wallPerimeter.splice(wallIndex, 1);
         }
-        
-        // Give back some resources (half the cost)
-        gameState.resources.wood += Math.floor(BUILDING_TYPES.WALL.woodCost / 2);
-        gameState.resources.stone += Math.floor(BUILDING_TYPES.WALL.stoneCost / 2);
     }
     
     if (wallsToRemove.length > 0) {
-        console.log(`Removed ${wallsToRemove.length} redundant walls`);
-        showMessage(`${wallsToRemove.length} interior wall(s) have been dismantled.`);
+        console.log(`Removed ${wallsToRemove.length} redundant walls from kingdom ${kingdomId}`);
+        
+        // Only show a message to the player if it's their kingdom
+        if (kingdomId === 0) {
+            showMessage(`${wallsToRemove.length} adet iç duvar, artık gerekli olmadığı için kaldırıldı.`);
+        }
     }
     
     return wallsToRemove.length > 0;
-    */
 }
 
 // Start soldier training after a house is built
@@ -1223,4 +1208,5 @@ window.buildMill = buildMill;
 window.buildTower = buildTower;
 window.buildWall = buildWall;
 window.startSoldierTraining = startSoldierTraining;
-window.updateSoldierTraining = updateSoldierTraining; 
+window.updateSoldierTraining = updateSoldierTraining;
+window.checkRedundantWalls = checkRedundantWalls; 
